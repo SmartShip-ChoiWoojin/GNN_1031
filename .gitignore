@@ -184,3 +184,8 @@ pyrightconfig.json
 # json
 *.json
 
+# 생성물 — 그래프 캐시(수백 MB), 체크포인트, 그림
+cache/
+runs/
+*.zip
+
