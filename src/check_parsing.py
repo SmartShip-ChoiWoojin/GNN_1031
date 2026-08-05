@@ -37,10 +37,12 @@ def main() -> int:
     print(f"json 없는 bdf     : {bdf_only}")
     print(f"bdf 없는 json     : {json_only}")
     # 계획서에 기록된 알려진 불일치 두 건
-    if bdf_only != ["SN2592_FWD_Clean_1603"]:
-        fails.append(f"예상과 다른 bdf-only 목록: {bdf_only}")
-    if json_only != ["SN2592_FWD_Clean_4000"]:
-        fails.append(f"예상과 다른 json-only 목록: {json_only}")
+    # SN2592_FWD_Clean 폴더는 라벨 엑셀 4000행과 완전히 일치하는 전체 데이터셋이라
+    # 짝 안 맞는 파일이 없어야 한다 (구버전 "fe model 1D 0706"은 1603개뿐이었음).
+    if bdf_only:
+        fails.append(f"json 없는 bdf 있음: {bdf_only}")
+    if json_only:
+        fails.append(f"bdf 없는 json 있음: {json_only}")
 
     print()
     print("=" * 70)
@@ -118,8 +120,8 @@ def main() -> int:
     print(f"파싱 가능 & 학습 가능 : {len(usable)}")
     print(f"  정상(0)   : {ys.count(0)}")
     print(f"  비정상(1) : {ys.count(1)}")
-    if len(usable) != 1262:
-        fails.append(f"학습 가능 모델 수가 1262가 아님: {len(usable)}")
+    if len(usable) != 3214:
+        fails.append(f"학습 가능 모델 수가 3214가 아님: {len(usable)}")
 
     print()
     print("=" * 70)
