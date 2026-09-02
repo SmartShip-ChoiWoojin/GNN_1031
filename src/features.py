@@ -45,14 +45,14 @@ def local_frame(P: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.n
         (원점=중심, ex, ey, 법선). ``ex`` 는 첫 변 방향, ``ey = n × ex``.
     """
     _, n = area_normal(P)
-    o = P.mean(axis=0)
-    ex = P[1] - P[0]
-    ex = ex / (np.linalg.norm(ex) + EPS)
-    # ex 가 법선과 거의 평행한 퇴화 상황 방어
+    o = P.mean(axis=0) # 해당 shell의 중심점
+    ex = P[1] - P[0] # 로컬 x축 방향 
+    ex = ex / (np.linalg.norm(ex) + EPS) # ex 가 법선과 거의 평행한 퇴화 상황 방어
+    
     if abs(float(np.dot(ex, n))) > 0.99:
         ex = P[2] - P[0]
         ex = ex / (np.linalg.norm(ex) + EPS)
-    ex = ex - float(np.dot(ex, n)) * n
+    ex = ex - float(np.dot(ex, n)) * n # 성분 제거 -> 실제 shell이 완벽하게 평평하지 않을 수도 있기 때문
     ex = ex / (np.linalg.norm(ex) + EPS)
     ey = np.cross(n, ex)
     return o, ex, ey, n
