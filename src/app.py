@@ -27,6 +27,7 @@ from itertools import combinations
 from types import SimpleNamespace
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import torch
@@ -135,14 +136,12 @@ def parse_sample(name: str) -> MeshRep:
 
 
 @st.cache_data(show_spinner=False)
-def load_oof_errors(run_dir: str) -> "pd.DataFrame":
+def load_oof_errors(run_dir: str) -> pd.DataFrame:
     """train.py 가 저장해둔 out-of-fold 예측(oof.csv/oof_names.txt)에서 FP/FN 만 추린다.
 
     재추론 없이 그대로 쓴다 — 각 샘플이 자기를 학습에 안 쓴 fold 로 이미 정직하게
     평가된 결과이므로, "왜 틀렸는지" 훑어볼 목록으로 그대로 신뢰할 수 있다.
     """
-    import pandas as pd
-
     oof_path = os.path.join(run_dir, "oof.csv")
     names_path = os.path.join(run_dir, "oof_names.txt")
     if not (os.path.isfile(oof_path) and os.path.isfile(names_path)):
