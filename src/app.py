@@ -3,7 +3,9 @@
     streamlit run src/app.py
 
 기능
-  - 샘플 폴더에서 모델 선택, 또는 .bdf(+.json) 직접 업로드
+  - 샘플 폴더에서 모델 선택, 오분류(FP/FN) 목록에서 선택, 또는 .bdf(+.json) 직접 업로드
+  - 오분류 목록은 train.py 가 저장한 out-of-fold 예측(oof.csv)을 그대로 써서
+    재추론 없이 즉시 FP/FN 을 걸러내고, 확신도(0.5 에서 먼 정도) 순으로 정렬한다
   - Plotly 3D — 마우스로 자유롭게 회전·확대·이동, 요소에 마우스 올리면 상세정보
   - 초기 화면은 채색 없이 메쉬 형상만 명확히 표시. "중요도 강조"를 켜면
     임계값 이상인 요소만 단일 색 계열(빨강)로, 나머지는 중립 회색으로 표시
@@ -130,6 +132,39 @@ def parse_sample(name: str) -> MeshRep:
     bdf_path = os.path.join(paths.FE_DIR, f"{name}.bdf")
     json_path = os.path.join(paths.FE_DIR, f"{name}.json")
     return MeshRep(load_raw_mesh(bdf_path, json_path))
+
+
+@st.cache_data(show_spinner=False)
+def load_oof_errors(run_dir: str) -> "pd.DataFrame":
+    """train.py 가 저장해둔 out-of-fold 예측(oof.csv/oof_names.txt)에서 FP/FN 만 추린다.
+
+    재추론 없이 그대로 쓴다 — 각 샘플이 자기를 학습에 안 쓴 fold 로 이미 정직하게
+    평가된 결과이므로, "왜 틀렸는지" 훑어볼 목록으로 그대로 신뢰할 수 있다.
+    """
+    import pandas as pd
+
+    oof_path = os.path.join(run_dir, "oof.csv")
+    names_path = os.path.join(run_dir, "oof_names.txt")
+    if not (os.path.isfile(oof_path) and os.path.isfile(names_path)):
+        return pd.DataFrame(columns=["name", "y", "prob", "kind", "conf"])
+
+    arr = np.loadtxt(oof_path, delimiter=",", skiprows=1)
+    with open(names_path, "r", encoding="utf-8") as fh:
+        names = fh.read().splitlines()
+
+    y = arr[:, 1].astype(int)
+    prob = arr[:, 2]
+    pred = (prob > 0.5).astype(int)
+
+    df = pd.DataFrame({"name": names, "y": y, "prob": prob})
+    df["kind"] = np.select(
+        [(y == 0) & (pred == 1), (y == 1) & (pred == 0)],
+        ["FP", "FN"], default="정답",
+    )
+    # 틀린 정도(0.5 에서 얼마나 확신에 차서 틀렸는지) — 큰 순으로 보면
+    # "모델이 왜 이렇게 확신했는데 틀렸지?"를 먼저 보게 된다.
+    df["conf"] = np.abs(df["prob"] - 0.5)
+    return df
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -527,13 +562,50 @@ with st.sidebar:
 
     st.divider()
     st.subheader("파일 선택")
-    source = st.radio("불러올 방식", ["샘플 폴더에서 선택", "직접 업로드"])
+    source = st.radio(
+        "불러올 방식",
+        ["샘플 폴더에서 선택", "오분류(FP/FN) 목록에서 선택", "직접 업로드"],
+    )
 
     rep: MeshRep | None = None
     if source == "샘플 폴더에서 선택":
         samples = available_samples()
         name = st.selectbox("모델 이름", samples, index=0)
         rep = parse_sample(name)
+
+    elif source == "오분류(FP/FN) 목록에서 선택":
+        err_df = load_oof_errors(run_dir)
+        if err_df.empty:
+            st.warning(
+                "이 실행에는 oof.csv 가 없습니다 — train.py 로 학습한 실행만 가능합니다."
+            )
+        else:
+            kind = st.radio(
+                "무엇을 볼지", ["FP (정상을 비정상으로 오판)", "FN (비정상을 정상으로 오판)", "둘 다"],
+                help="FP=실제 정상인데 모델이 비정상이라 한 것. FN=실제 비정상인데 정상이라 한 것.",
+            )
+            want = {"FP (정상을 비정상으로 오판)": ["FP"],
+                   "FN (비정상을 정상으로 오판)": ["FN"],
+                   "둘 다": ["FP", "FN"]}[kind]
+            sub = err_df[err_df["kind"].isin(want)].sort_values("conf", ascending=False)
+
+            n_fp = int((err_df["kind"] == "FP").sum())
+            n_fn = int((err_df["kind"] == "FN").sum())
+            st.caption(f"전체 {len(err_df)}개 중 FP {n_fp}개 / FN {n_fn}개 "
+                      f"(현재 선택 {len(sub)}개, 확신도 높은 오분류부터 정렬)")
+
+            if sub.empty:
+                st.info("해당하는 오분류 사례가 없습니다.")
+            else:
+                labels_ui = [
+                    f"[{r.kind}] {r.name}  (실제 {'비정상' if r.y == 1 else '정상'}, "
+                    f"예측확률 {r.prob:.3f})"
+                    for r in sub.itertuples()
+                ]
+                pick = st.selectbox("오분류 사례", labels_ui, index=0)
+                sel_name = sub.iloc[labels_ui.index(pick)]["name"]
+                rep = parse_sample(sel_name)
+
     else:
         bdf_file = st.file_uploader(".bdf 파일", type=["bdf"])
         json_file = st.file_uploader(".json 파일 (선택 — 없으면 전 절점 외부연결=False)",
@@ -598,12 +670,12 @@ with tab_mesh:
         opacity, show_lines, show_ext, show_bad_outline,
         highlight, threshold,
     )
-    st.plotly_chart(fig, use_container_width=True, key="mesh_fig")
+    st.plotly_chart(fig, width="stretch", key="mesh_fig")
 
     st.subheader("중요도 상위 요소")
     st.dataframe(
         top_elements_table(rep, result["imp"], result["args"].graph, k=10),
-        use_container_width=True, hide_index=True,
+        width="stretch", hide_index=True,
     )
 
     n_bad = sum(1 for s in rep.shells if F.is_bad_shell(s.quality))
@@ -634,4 +706,4 @@ with tab_graph:
         st.markdown("노드 = GRID 절점, 엣지 = 쉘 요소의 변 — 원본 메쉬와 거의 같은 구조입니다.")
         fig2 = build_graph_figure_node(rep)
 
-    st.plotly_chart(fig2, use_container_width=True, key="graph_fig")
+    st.plotly_chart(fig2, width="stretch", key="graph_fig")

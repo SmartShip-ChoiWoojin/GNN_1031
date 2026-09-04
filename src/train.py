@@ -140,7 +140,7 @@ def train_one_fold(
     n_pos = int((y_all[inner_tr] == 1).sum())
     n_neg = int((y_all[inner_tr] == 0).sum())
     pos_weight = torch.tensor([n_neg / max(n_pos, 1)], device=device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight) # 이진 분류용 표준 손실
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
