@@ -223,6 +223,7 @@ def build_mesh_figure(
     show_lines: bool,
     show_ext: bool,
     show_bad_outline: bool,
+    show_shell_edges: bool,
     highlight: bool,
     threshold: float,
 ) -> go.Figure:
@@ -288,6 +289,21 @@ def build_mesh_figure(
         ))
     else:
         fig.add_trace(go.Mesh3d(**mesh_kwargs, color=NEUTRAL_SHELL))
+
+    # ── 쉘 경계선 — 옅은 회색. 인접한 쉘끼리 색이 비슷하면 뭉개져 보이므로,
+    # 요소 하나하나의 경계를 항상 그어서 구분되게 한다 (진하게는 하지 않는다).
+    if show_shell_edges:
+        sx, sy, sz = [], [], []
+        for e in rep.edge_shells:
+            a, b = tuple(e)
+            pa, pb = rep.raw.coords[a], rep.raw.coords[b]
+            sx += [pa[0], pb[0], None]; sy += [pa[1], pb[1], None]; sz += [pa[2], pb[2], None]
+        if sx:
+            fig.add_trace(go.Scatter3d(
+                x=sx, y=sy, z=sz, mode="lines",
+                line=dict(color="#6b7280", width=1.5), opacity=0.55,
+                name="쉘 경계", hoverinfo="skip",
+            ))
 
     # ── 규칙 기반 불량각도 요소 테두리 (검정 — 빨강 강조와 구분되는 별도 신호) ──
     if show_bad_outline:
@@ -625,6 +641,7 @@ with st.sidebar:
     show_lines = st.checkbox("1D 요소(CBAR/CBEAM) 표시", value=True)
     show_ext = st.checkbox("외부연결 절점 표시", value=True)
     show_bad_outline = st.checkbox("규칙 기반 불량각도 요소 테두리", value=True)
+    show_shell_edges = st.checkbox("쉘 경계선 표시 (요소끼리 구분)", value=True)
 
     st.divider()
     st.subheader("중요도 강조")
@@ -666,7 +683,7 @@ tab_mesh, tab_graph = st.tabs(["3D 메쉬", "그래프 구조"])
 with tab_mesh:
     fig = build_mesh_figure(
         rep, result["ga"], result["imp"], result["args"].graph,
-        opacity, show_lines, show_ext, show_bad_outline,
+        opacity, show_lines, show_ext, show_bad_outline, show_shell_edges,
         highlight, threshold,
     )
     st.plotly_chart(fig, width="stretch", key="mesh_fig")
