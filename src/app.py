@@ -585,8 +585,16 @@ with st.sidebar:
     rep: MeshRep | None = None
     if source == "샘플 폴더에서 선택":
         samples = available_samples()
-        name = st.selectbox("모델 이름", samples, index=0)
-        rep = parse_sample(name)
+        query = st.text_input(
+            "검색 (부분 문자열, 예: 0250)", key="search_sample",
+            help="입력한 글자를 이름 어디에든 포함하는 파일만 드롭다운에 남습니다.",
+        )
+        filtered = [s for s in samples if query.lower() in s.lower()] if query else samples
+        if not filtered:
+            st.warning(f"'{query}' 를 포함하는 파일이 없습니다.")
+        else:
+            name = st.selectbox(f"모델 이름 ({len(filtered)}개)", filtered, index=0)
+            rep = parse_sample(name)
 
     elif source == "오분류(FP/FN) 목록에서 선택":
         err_df = load_oof_errors(run_dir)
@@ -617,9 +625,21 @@ with st.sidebar:
                     f"예측확률 {r.prob:.3f})"
                     for r in sub.itertuples()
                 ]
-                pick = st.selectbox("오분류 사례", labels_ui, index=0)
-                sel_name = sub.iloc[labels_ui.index(pick)]["name"]
-                rep = parse_sample(sel_name)
+                query2 = st.text_input(
+                    "검색 (이름 부분 문자열, 예: 0250)", key="search_err",
+                )
+                labels_ui_f = (
+                    [l for l in labels_ui if query2.lower() in l.lower()]
+                    if query2 else labels_ui
+                )
+                if not labels_ui_f:
+                    st.warning(f"'{query2}' 를 포함하는 사례가 없습니다.")
+                else:
+                    pick = st.selectbox(
+                        f"오분류 사례 ({len(labels_ui_f)}개)", labels_ui_f, index=0
+                    )
+                    sel_name = sub.iloc[labels_ui.index(pick)]["name"]
+                    rep = parse_sample(sel_name)
 
     else:
         bdf_file = st.file_uploader(".bdf 파일", type=["bdf"])
