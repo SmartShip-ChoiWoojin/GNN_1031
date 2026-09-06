@@ -177,6 +177,7 @@ def predict(rep: MeshRep, run_dir: str, device_str: str) -> dict:
 
     ga = graphs.build(rep, args.graph, **opts)
 
+    detail: dict = {}
     if rep.name in names:
         idx = names.index(rep.name)
         fold = int(fold_of[idx])
@@ -185,20 +186,24 @@ def predict(rep: MeshRep, run_dir: str, device_str: str) -> dict:
         prob = 1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1])))
         mode = f"fold {fold} 모델 (이 요소를 학습에 쓰지 않음)"
         truth = labels[idx]
+        detail = dict(kind="single", fold=fold, logit=float(logit), platt=platt)
     else:
-        probs, alphas = [], []
+        probs, alphas, logits = [], [], []
         for f in range(1, args.folds + 1):
             model, norm, _, platt = get_fold_model(run_dir, f, device_str)
             logit, alpha = attention_for(ga, rep.name, 0, model, norm, device)
-            probs.append(1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1]))))
+            p = 1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1])))
+            probs.append(p)
+            logits.append(float(logit))
             alphas.append(alpha)
         prob = float(np.mean(probs))
         alpha = np.mean(np.stack(alphas), axis=0)
         mode = f"{args.folds}-fold 앙상블 평균 (학습셋에 없는 파일)"
         truth = None
+        detail = dict(kind="ensemble", fold_probs=probs, logits=logits)
 
     imp = relative_importance(alpha)
-    return dict(args=args, ga=ga, prob=prob, imp=imp, mode=mode, truth=truth)
+    return dict(args=args, ga=ga, prob=prob, imp=imp, mode=mode, truth=truth, detail=detail)
 
 
 def per_element_importance(rep: MeshRep, imp: np.ndarray, graph_kind: str) -> np.ndarray:
@@ -706,6 +711,39 @@ else:
     else:
         col2.metric("실제 라벨", "정보 없음")
 col3.metric("요소 수", f"{len(rep.shells)}쉘 + {len(rep.lines)}개 1D")
+
+with st.expander("예측 상세 (정확한 확률·확신도)", expanded=False):
+    p = result["prob"]
+    margin = abs(p - 0.5)
+    st.markdown(
+        f"- **비정상 확률**: `{p:.6f}`  (반올림 없이)\n"
+        f"- **정상 확률**: `{1 - p:.6f}`  (= 1 − 비정상 확률)\n"
+        f"- **임계값(0.5) 대비 여유**: `{margin:.6f}`  "
+        f"({'비정상' if p > 0.5 else '정상'} 쪽으로 {margin / 0.5 * 100:.1f}% 만큼 치우침)"
+    )
+    if result["truth"] is not None:
+        st.markdown(
+            f"- **실제 라벨과 일치 여부**: "
+            f"{'✅ 일치' if (result['truth'] == 1) == (p > 0.5) else '❌ 불일치'}"
+        )
+    detail = result.get("detail", {})
+    if detail.get("kind") == "single":
+        a, b = detail["platt"]
+        st.markdown(
+            f"- **평가에 쓴 모델**: fold {detail['fold']} (이 메쉬를 학습에 쓰지 않은 모델)\n"
+            f"- **보정 전 원시 점수(logit)**: `{detail['logit']:.4f}`\n"
+            f"- **확률 보정식**: `p = sigmoid({a:.3f} × logit + {b:.3f})` "
+            f"(fold 간 확률 스케일을 맞추는 Platt 보정)"
+        )
+    elif detail.get("kind") == "ensemble":
+        fp = np.array(detail["fold_probs"])
+        st.markdown(
+            f"- **평가 방식**: 5개 fold 모델의 확률을 평균 (학습셋에 없는 파일이라 "
+            f"어느 fold가 정답인지 알 수 없어 전부 평균냄)\n"
+            f"- **fold별 확률**: {', '.join(f'{v:.3f}' for v in fp)}\n"
+            f"- **fold 간 표준편차**: `{fp.std():.4f}` "
+            f"({'모델들 의견이 갈림 — 신뢰도 낮음' if fp.std() > 0.15 else '모델들 의견 일치 — 신뢰도 높음'})"
+        )
 
 st.caption(f"평가 방식: {result['mode']}")
 
