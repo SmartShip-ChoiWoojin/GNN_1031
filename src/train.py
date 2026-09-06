@@ -229,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="요소기반에서 꼭짓점 인접 엣지를 뺀다 (ablation)")
     ap.add_argument("--no-lines", action="store_true",
                     help="요소기반에서 1D 요소 노드를 뺀다 (ablation)")
+    ap.add_argument("--separate-encoder", action="store_true",
+                    help="쉘/1D 노드를 각각 다른 인코더로 임베딩한다 (ablation)")
     ap.add_argument("--tag", default=None, help="실행 이름 (기본: graph_conv)")
     ap.add_argument("--cpu", action="store_true")
     ap.add_argument("--quiet", dest="verbose", action="store_false")
@@ -257,7 +259,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"실행 {tag}   device={device}")
     print(f"  그래프={args.graph}  conv={args.conv}  hidden={args.hidden}  layers={args.layers}")
     print(f"  분할={args.split}  ext={args.ext_mask}  "
-          f"집계피처={'off' if args.no_graph_features else 'on'}  옵션={opts}")
+          f"집계피처={'off' if args.no_graph_features else 'on'}  "
+          f"인코더분리={'on' if args.separate_encoder else 'off'}  옵션={opts}")
     print("=" * 72)
 
     names, labels, arrays = DS.build_cache(

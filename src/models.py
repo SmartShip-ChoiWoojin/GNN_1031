@@ -77,6 +77,17 @@ class MeshGNN(nn.Module):
             외부연결 정보는 하드 마스킹보다 피처로 주고 학습시키는 쪽이 낫다.
             하드로 빼면 그 요소가 이웃에게 주는 문맥까지 사라진다.
         use_graph_features: 집계 피처 concat 사용 여부 (ablation 용).
+        separate_encoder: 쉘 노드와 1D 노드를 각각 다른 인코더로 임베딩한다 (ablation 용).
+            기본은 False — 하나의 ``Linear(d_node, hidden)`` 를 공유한다. 요소기반 그래프는
+            쉘 전용 피처(s_*)와 1D 전용 피처(l_*)를 한 벡터에 담고 해당 없는 칸을 0으로
+            채우는데(graph_elem.py), 공유 인코더는 이 두 가지 서로 다른 0-패턴을 한
+            가중치 행렬로 처리해야 한다. 관찰된 실패 사례(예: SN2592_FWD_Clean_3127) —
+            형상상 아무 이상 없는 CBEAM 이 같은 그래프의 어떤 쉘보다도 높은 어텐션을
+            받고, 그 그래프는 실제로는 정상인데 모델이 비정상(p=0.985)으로 오판했다 —
+            를 보면 인코더가 "형상이 나쁘다"가 아니라 "타입이 1D 다"라는 지름길을
+            학습했을 가능성이 있다. ``separate_encoder=True`` 면 타입별로 가중치를
+            분리해 이 지름길을 원천적으로 막는다. 그래프 구조(노드/엣지/순서)는
+            전혀 바뀌지 않는다 — 노드를 처음 숫자 벡터로 바꾸는 단계만 타입별로 나뉜다.
     """
 
     def __init__(
@@ -91,6 +102,7 @@ class MeshGNN(nn.Module):
         heads: int = 4,
         ext_mask_index: int | None = None,
         use_graph_features: bool = True,
+        separate_encoder: bool = False,
     ):
         super().__init__()
         if conv not in CONV_KINDS:
@@ -101,10 +113,22 @@ class MeshGNN(nn.Module):
         self.dropout = dropout
         self.ext_mask_index = ext_mask_index
         self.use_graph_features = use_graph_features
+        self.separate_encoder = separate_encoder
 
-        self.node_enc = nn.Sequential(
-            nn.Linear(d_node, hidden), nn.BatchNorm1d(hidden), nn.ReLU()
-        )
+        if separate_encoder:
+            # 쉘/1D 를 각각 다른 가중치로 임베딩한다. 그래프 구조는 그대로이고,
+            # "노드를 처음 벡터로 바꾸는 단계"만 노드 종류별로 나뉜다.
+            self.node_enc = None
+            self.node_enc_shell = nn.Sequential(
+                nn.Linear(d_node, hidden), nn.BatchNorm1d(hidden), nn.ReLU()
+            )
+            self.node_enc_line = nn.Sequential(
+                nn.Linear(d_node, hidden), nn.BatchNorm1d(hidden), nn.ReLU()
+            )
+        else:
+            self.node_enc = nn.Sequential(
+                nn.Linear(d_node, hidden), nn.BatchNorm1d(hidden), nn.ReLU()
+            )
         # 엣지 피처는 한 번만 인코딩해서 모든 층이 공유한다 (전 층의 노드 차원이 hidden 이라
         # GINEConv/GATv2Conv 의 edge_dim 을 따로 맞출 필요가 없다)
         self.edge_enc = nn.Sequential(
@@ -143,9 +167,25 @@ class MeshGNN(nn.Module):
         self.head = mlp(readout_dim, hidden, hidden // 2, 1, dropout=dropout)
 
     # ──────────────────────────────────────────────────────────────────
+    def _encode_nodes(self, data) -> torch.Tensor:
+        """노드 원시 피처 -> hidden 차원 임베딩 (메시지 전달 이전 첫 단계)."""
+        if not self.separate_encoder:
+            return self.node_enc(data.x)
+
+        # node_kind: graph_base.KIND_SHELL(0) / KIND_LINE(1). 노드 순서·개수는 그대로 두고,
+        # 어느 통역사(인코더)를 태울지만 행 단위로 고른다 — 결과를 원래 자리에 도로 채운다.
+        is_line = data.node_kind == 1
+        is_shell = ~is_line
+        x = torch.zeros(data.x.size(0), self.hidden, device=data.x.device, dtype=data.x.dtype)
+        if bool(is_shell.any()):
+            x[is_shell] = self.node_enc_shell(data.x[is_shell])
+        if bool(is_line.any()):
+            x[is_line] = self.node_enc_line(data.x[is_line])
+        return x
+
     def encode(self, data) -> torch.Tensor:
         """메시지 전달 후의 노드 임베딩."""
-        x = self.node_enc(data.x)
+        x = self._encode_nodes(data)
         e = (
             self.edge_enc(data.edge_attr)
             if data.edge_attr.numel()
@@ -210,6 +250,8 @@ def build_model(
         heads=args.heads,
         ext_mask_index=ext_mask_index,
         use_graph_features=not args.no_graph_features,
+        # getattr: 이 플래그 이전에 학습된 체크포인트의 args 에는 키가 없다
+        separate_encoder=getattr(args, "separate_encoder", False),
     )
 
 

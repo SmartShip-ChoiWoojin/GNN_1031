@@ -25,6 +25,8 @@ def describe(args: dict) -> str:
         bits.append("집계피처off")
     if args.get("no_lines"):
         bits.append("1D없음")
+    if args.get("separate_encoder"):
+        bits.append("인코더분리")
     if args.get("no_corner_edges"):
         bits.append("꼭짓점엣지off")
     if args.get("ext_mask") == "hard":
