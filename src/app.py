@@ -3,7 +3,8 @@
     streamlit run src/app.py
 
 기능
-  - 샘플 폴더에서 모델 선택, 오분류(FP/FN) 목록에서 선택, 또는 .bdf(+.json) 직접 업로드
+  - 샘플 폴더에서 모델 선택, 예측 사례(FP/FN/경계선 근처 정답) 목록에서 선택,
+    또는 .bdf(+.json) 직접 업로드
   - 오분류 목록은 train.py 가 저장한 out-of-fold 예측(oof.csv)을 그대로 써서
     재추론 없이 즉시 FP/FN 을 걸러내고, 확신도(0.5 에서 먼 정도) 순으로 정렬한다
   - Plotly 3D — 마우스로 자유롭게 회전·확대·이동, 요소에 마우스 올리면 상세정보
@@ -137,10 +138,12 @@ def parse_sample(name: str) -> MeshRep:
 
 @st.cache_data(show_spinner=False)
 def load_oof_errors(run_dir: str) -> pd.DataFrame:
-    """train.py 가 저장해둔 out-of-fold 예측(oof.csv/oof_names.txt)에서 FP/FN 만 추린다.
+    """train.py 가 저장해둔 out-of-fold 예측(oof.csv/oof_names.txt) 전체를 읽어
+    이름을 붙인다 — 각 행이 FP / FN / 정답 중 하나로 분류된다.
 
     재추론 없이 그대로 쓴다 — 각 샘플이 자기를 학습에 안 쓴 fold 로 이미 정직하게
-    평가된 결과이므로, "왜 틀렸는지" 훑어볼 목록으로 그대로 신뢰할 수 있다.
+    평가된 결과이므로, "왜 틀렸는지"·"얼마나 아슬아슬하게 맞았는지" 훑어볼 목록으로
+    그대로 신뢰할 수 있다. 호출부에서 kind/conf 로 원하는 부분집합을 걸러 쓴다.
     """
     oof_path = os.path.join(run_dir, "oof.csv")
     names_path = os.path.join(run_dir, "oof_names.txt")
@@ -595,7 +598,7 @@ with st.sidebar:
     st.subheader("파일 선택")
     source = st.radio(
         "불러올 방식",
-        ["샘플 폴더에서 선택", "오분류(FP/FN) 목록에서 선택", "직접 업로드"],
+        ["샘플 폴더에서 선택", "예측 사례 목록에서 선택 (FP/FN/경계선)", "직접 업로드"],
     )
 
     rep: MeshRep | None = None
@@ -612,7 +615,7 @@ with st.sidebar:
             name = st.selectbox(f"모델 이름 ({len(filtered)}개)", filtered, index=0)
             rep = parse_sample(name)
 
-    elif source == "오분류(FP/FN) 목록에서 선택":
+    elif source == "예측 사례 목록에서 선택 (FP/FN/경계선)":
         err_df = load_oof_errors(run_dir)
         if err_df.empty:
             st.warning(
@@ -620,21 +623,37 @@ with st.sidebar:
             )
         else:
             kind = st.radio(
-                "무엇을 볼지", ["FP (정상을 비정상으로 오판)", "FN (비정상을 정상으로 오판)", "둘 다"],
-                help="FP=실제 정상인데 모델이 비정상이라 한 것. FN=실제 비정상인데 정상이라 한 것.",
+                "무엇을 볼지",
+                ["FP (정상을 비정상으로 오판)", "FN (비정상을 정상으로 오판)", "둘 다",
+                 "경계선 근처 정답 (확신도 낮게 맞춘 사례)"],
+                help="FP=실제 정상인데 모델이 비정상이라 한 것. FN=실제 비정상인데 정상이라 한 것. "
+                    "경계선 근처 정답=답은 맞혔지만 0.5 에 아슬아슬하게 가까운 확률로 맞춘 사례.",
             )
-            want = {"FP (정상을 비정상으로 오판)": ["FP"],
-                   "FN (비정상을 정상으로 오판)": ["FN"],
-                   "둘 다": ["FP", "FN"]}[kind]
-            sub = err_df[err_df["kind"].isin(want)].sort_values("conf", ascending=False)
 
-            n_fp = int((err_df["kind"] == "FP").sum())
-            n_fn = int((err_df["kind"] == "FN").sum())
-            st.caption(f"전체 {len(err_df)}개 중 FP {n_fp}개 / FN {n_fn}개 "
-                      f"(현재 선택 {len(sub)}개, 확신도 높은 오분류부터 정렬)")
+            if kind == "경계선 근처 정답 (확신도 낮게 맞춘 사례)":
+                max_conf = st.slider(
+                    "확신도 상한 (0.5 에서 얼마나 떨어졌는지)", 0.0, 0.5, 0.15, 0.01,
+                    help="0 에 가까울수록 아슬아슬하게(50%에 가깝게) 맞춘 사례. "
+                        "예: 0.15 → 확률 0.35~0.65 사이로 맞춘 것만.",
+                )
+                sub = err_df[
+                    (err_df["kind"] == "정답") & (err_df["conf"] <= max_conf)
+                ].sort_values("conf")
+                n_correct = int((err_df["kind"] == "정답").sum())
+                st.caption(f"정답 {n_correct}개 중 확신도 {max_conf:.2f} 이하로 맞춘 사례 "
+                          f"{len(sub)}개 (0.5 에 가장 가까운 순 — 가장 아슬아슬한 것부터)")
+            else:
+                want = {"FP (정상을 비정상으로 오판)": ["FP"],
+                       "FN (비정상을 정상으로 오판)": ["FN"],
+                       "둘 다": ["FP", "FN"]}[kind]
+                sub = err_df[err_df["kind"].isin(want)].sort_values("conf", ascending=False)
+                n_fp = int((err_df["kind"] == "FP").sum())
+                n_fn = int((err_df["kind"] == "FN").sum())
+                st.caption(f"전체 {len(err_df)}개 중 FP {n_fp}개 / FN {n_fn}개 "
+                          f"(현재 선택 {len(sub)}개, 확신도 높은 오분류부터 정렬)")
 
             if sub.empty:
-                st.info("해당하는 오분류 사례가 없습니다.")
+                st.info("해당하는 사례가 없습니다.")
             else:
                 labels_ui = [
                     f"[{r.kind}] {r.name}  (실제 {'비정상' if r.y == 1 else '정상'}, "
@@ -652,7 +671,7 @@ with st.sidebar:
                     st.warning(f"'{query2}' 를 포함하는 사례가 없습니다.")
                 else:
                     pick = st.selectbox(
-                        f"오분류 사례 ({len(labels_ui_f)}개)", labels_ui_f, index=0
+                        f"예측 사례 ({len(labels_ui_f)}개)", labels_ui_f, index=0
                     )
                     sel_name = sub.iloc[labels_ui.index(pick)]["name"]
                     rep = parse_sample(sel_name)
