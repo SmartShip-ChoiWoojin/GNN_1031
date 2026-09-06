@@ -393,10 +393,21 @@ def _apply_layout(fig: go.Figure) -> None:
     )
 
 
-def top_elements_table(rep: MeshRep, imp: np.ndarray, graph_kind: str, k: int = 10):
+def top_elements_table(
+    rep: MeshRep, imp: np.ndarray, graph_kind: str, k: int = 10, only_shells: bool = False
+):
+    """중요도 상위 요소 표.
+
+    ``only_shells=True`` 면 1D 요소(CBAR/CBEAM)를 순위에서 아예 뺀다. 1D 는 형상
+    결함(각도/찌그러짐) 판정 대상이 아니라 보강재 위상 정보일 뿐이라 "판정" 칸이
+    항상 "-"인데, 그런데도 어텐션 점수가 커서 종합 순위에서 1등을 차지하면
+    "왜 비정상인지" 보여주려는 목적과 어긋난다. 쉘/1D 를 분리해서 보여주는 쪽을
+    기본으로 쓴다 (아래 UI 에서 두 표로 나눠 호출).
+    """
     n_shell = len(rep.shells)
     rows = []
-    order = np.argsort(-imp)[:k]
+    pool = np.arange(n_shell) if (graph_kind == "elem" and only_shells) else np.arange(len(imp))
+    order = pool[np.argsort(-imp[pool])][:k]
     for i in order:
         if graph_kind == "elem" and i >= n_shell:
             ln = rep.lines[i - n_shell]
@@ -709,10 +720,27 @@ with tab_mesh:
     st.plotly_chart(fig, width="stretch", key="mesh_fig")
 
     st.subheader("중요도 상위 요소")
-    st.dataframe(
-        top_elements_table(rep, result["imp"], result["args"].graph, k=10),
-        width="stretch", hide_index=True,
+    st.caption(
+        "1D 요소(CBAR/CBEAM)는 형상 결함 판정 대상이 아니라 보강재 위상 정보라서 "
+        "'판정' 칸이 항상 '-' 입니다. **왜 비정상인지는 아래 '쉘' 표를 먼저 보세요.**"
     )
+    col_shell, col_line = st.columns(2)
+    with col_shell:
+        st.markdown("**쉘 요소 (형상 결함 후보)**")
+        st.dataframe(
+            top_elements_table(rep, result["imp"], result["args"].graph, k=8, only_shells=True),
+            width="stretch", hide_index=True,
+        )
+    with col_line:
+        st.markdown("**1D 요소 (참고용 — 결함 판정 아님)**")
+        if result["args"].graph == "elem" and rep.lines:
+            full_ranked = top_elements_table(
+                rep, result["imp"], result["args"].graph, k=len(result["imp"])
+            )
+            line_rows = [r for r in full_ranked if r["종류"] in ("CBAR", "CBEAM")][:8]
+            st.dataframe(line_rows, width="stretch", hide_index=True)
+        else:
+            st.caption("이 실행은 1D 요소를 그래프에 포함하지 않습니다.")
 
     n_bad = sum(1 for s in rep.shells if F.is_bad_shell(s.quality))
     st.caption(

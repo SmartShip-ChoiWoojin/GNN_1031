@@ -200,23 +200,39 @@ def render(
 
 
 def top_elements(rep: MeshRep, ga, imp: np.ndarray, k: int = 5) -> list[str]:
-    """중요도 상위 요소를 사람이 읽을 문자열로."""
+    """중요도 상위 **쉘** 요소를 사람이 읽을 문자열로.
+
+    1D 요소는 여기서 뺀다 — 1D 는 형상 결함(각도/찌그러짐) 판정 대상이 아니라
+    보강재 위상 정보일 뿐인데, 종합 순위에 섞으면 어텐션이 큰 1D 가 "왜 비정상인지"
+    설명을 가로채는 경우가 있다(1D 노드는 shell 노드와 피처 인코더를 공유해서,
+    타입 자체가 어텐션 게이트에 지름길로 작용할 가능성이 있다). 1D 별도 순위는
+    :func:`top_line_elements` 로 확인한다.
+    """
     n_shell = len(rep.shells)
-    order = np.argsort(-imp)[:k]
+    order = np.argsort(-imp[:n_shell])[:k]
     out = []
     for i in order:
-        if i < n_shell:
-            sh = rep.shells[i]
-            q = sh.quality
-            ext = "ext" if all(rep.ext.get(n, False) for n in sh.nodes) else "내부"
-            out.append(
-                f"{imp[i]:5.2f}x  {sh.etype} {sh.eid:>6d}  "
-                f"내각 {q.angle_min:5.1f}~{q.angle_max:5.1f}°  "
-                f"aspect {q.aspect:4.2f}  {'불량' if F.is_bad_shell(q) else '정상'}  {ext}"
-            )
-        else:
-            ln = rep.lines[i - n_shell]
-            out.append(f"{imp[i]:5.2f}x  {ln.etype} {ln.eid:>6d}  길이 {ln.length:7.1f}")
+        sh = rep.shells[i]
+        q = sh.quality
+        ext = "ext" if all(rep.ext.get(n, False) for n in sh.nodes) else "내부"
+        out.append(
+            f"{imp[i]:5.2f}x  {sh.etype} {sh.eid:>6d}  "
+            f"내각 {q.angle_min:5.1f}~{q.angle_max:5.1f}°  "
+            f"aspect {q.aspect:4.2f}  {'불량' if F.is_bad_shell(q) else '정상'}  {ext}"
+        )
+    return out
+
+
+def top_line_elements(rep: MeshRep, imp: np.ndarray, k: int = 5) -> list[str]:
+    """중요도 상위 **1D** 요소 — 참고용. 결함 판정과는 무관하다 (top_elements 참고)."""
+    n_shell = len(rep.shells)
+    if len(imp) <= n_shell or not rep.lines:
+        return []
+    order = n_shell + np.argsort(-imp[n_shell:])[:k]
+    out = []
+    for i in order:
+        ln = rep.lines[i - n_shell]
+        out.append(f"{imp[i]:5.2f}x  {ln.etype} {ln.eid:>6d}  길이 {ln.length:7.1f}")
     return out
 
 
@@ -392,9 +408,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{names[i]}  실제 {truth} / 예측 {pred} p={p:.3f}  (fold {fold} 모델)")
         print(f"  요소 {len(rep.shells)}쉘 + {len(rep.lines)}개 1D, "
               f"불량각도 요소 {sum(F.is_bad_shell(s.quality) for s in rep.shells)}개")
-        print(f"  중요도 상위 (1.00x = 평균):")
+        print(f"  중요도 상위 쉘 (1.00x = 평균, 형상 결함 후보):")
         for line in top_elements(rep, arrays[i], imp, k=6):
             print("    " + line)
+        line_top = top_line_elements(rep, imp, k=3)
+        if line_top:
+            print(f"  중요도 상위 1D (참고용 — 결함 판정 아님):")
+            for line in line_top:
+                print("    " + line)
 
     fig.tight_layout()
     out = a.out or os.path.join(run_dir, "explain.png")
