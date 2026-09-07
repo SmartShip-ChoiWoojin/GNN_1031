@@ -4,7 +4,8 @@
 
 기능
   - 샘플 폴더에서 모델 선택, 예측 사례(FP/FN/경계선 근처 정답) 목록에서 선택,
-    또는 .bdf(+.json) 직접 업로드
+    애매/분류어려움(학습 제외) 목록에서 선택, 또는 .bdf(+.json) 직접 업로드
+  - 사이드바에 현재 선택한 실행의 5-fold 성능(AUC/ACC/F1)을 상시 표시
   - 오분류 목록은 train.py 가 저장한 out-of-fold 예측(oof.csv)을 그대로 써서
     재추론 없이 즉시 FP/FN 을 걸러내고, 확신도(0.5 에서 먼 정도) 순으로 정렬한다
   - Plotly 3D — 마우스로 자유롭게 회전·확대·이동, 요소에 마우스 올리면 상세정보
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import glob
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -85,6 +87,17 @@ def label_lookup() -> dict[str, tuple[int, int]]:
     return {r.name: (int(r.cls), int(r.ambig)) for r in df.itertuples()}
 
 
+@st.cache_data
+def load_run_metrics(run_dir: str) -> dict | None:
+    """train.py 가 저장한 result.json 에서 fold 평균 성능을 읽는다."""
+    path = os.path.join(run_dir, "result.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as fh:
+        res = json.load(fh)
+    return {"fold_mean": res["fold_mean"], "n_samples": res["n_samples"]}
+
+
 @st.cache_resource(show_spinner=False)
 def get_run_context(run_dir: str):
     """(args, names, labels, arrays, fold_of, opts) — 학습 캐시와 fold 배정을 한 번만 계산."""
@@ -123,8 +136,7 @@ def parse_from_bytes(bdf_bytes: bytes, json_bytes: bytes | None, name_hint: str)
             coords, _, _ = read_bdf(bdf_path)
             json_path = os.path.join(td, f"{name_hint}.json")
             with open(json_path, "w", encoding="utf-8") as fh:
-                import json as _json
-                _json.dump({str(k): False for k in coords}, fh)
+                json.dump({str(k): False for k in coords}, fh)
 
         return MeshRep(load_raw_mesh(bdf_path, json_path))
 
@@ -167,6 +179,44 @@ def load_oof_errors(run_dir: str) -> pd.DataFrame:
     # "모델이 왜 이렇게 확신했는데 틀렸지?"를 먼저 보게 된다.
     df["conf"] = np.abs(df["prob"] - 0.5)
     return df
+
+
+@st.cache_data(show_spinner="애매/분류어려움 사례 예측 계산 중 (최초 1회, 다소 걸릴 수 있음)...")
+def load_ambiguous_predictions(run_dir: str, device_str: str) -> pd.DataFrame:
+    """학습에서 제외한 애매(ambig=1)/분류어려움(cls=2) 사례에 5-fold 앙상블을 돌린다.
+
+    train.py 의 oof.csv 는 학습 대상(확실 & cls<2)에만 있어서 이 사례들은 없다.
+    여기서는 직접 그래프를 만들어 5개 fold 모델 평균으로 예측한다 — 결과가 run_dir,
+    device_str 조합으로 캐시되므로 같은 세션에서는 한 번만 계산한다.
+    """
+    args, names, labels, arrays, fold_of, opts = get_run_context(run_dir)
+    trainset = set(names)
+    device = torch.device(device_str)
+
+    table = load_label_table(paths.LABEL_XLSX)
+    non_train = table[~table["trainable"]]
+    paired, _, _ = discover_pairs(paths.FE_DIR)
+
+    rows = []
+    for r in non_train.itertuples():
+        if r.name not in paired or r.name in trainset:
+            continue
+        bdf, js = paired[r.name]
+        rep = MeshRep(load_raw_mesh(bdf, js))
+        ga = graphs.build(rep, args.graph, **opts)
+
+        probs = []
+        for f in range(1, args.folds + 1):
+            model, norm, _, platt = get_fold_model(run_dir, f, device_str)
+            logit, _ = attention_for(ga, r.name, 0, model, norm, device)
+            probs.append(1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1]))))
+        prob = float(np.mean(probs))
+        pred = int(prob > 0.5)
+        rows.append(dict(
+            name=r.name, cls=int(r.cls), ambig=int(r.ambig), prob=prob, pred=pred,
+            agree=(pred == r.cls) if r.cls in (0, 1) else None,
+        ))
+    return pd.DataFrame(rows)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -591,6 +641,17 @@ with st.sidebar:
     run_name = st.selectbox("모델 실행", runs, index=runs.index(default_run))
     run_dir = os.path.join(paths.RUNS_DIR, run_name)
 
+    run_metrics = load_run_metrics(run_dir)
+    if run_metrics:
+        fm = run_metrics["fold_mean"]
+        st.caption(
+            f"이 실행의 5-fold 성능 — AUC **{fm['auc']:.4f}** · "
+            f"ACC **{fm['acc']:.4f}** · F1 **{fm['f1']:.4f}** "
+            f"(학습대상 {run_metrics['n_samples']}개, fold 평균)"
+        )
+    else:
+        st.caption("이 실행의 result.json 을 찾을 수 없습니다.")
+
     device_str = st.radio("연산 장치", ["cpu"] + (["cuda"] if torch.cuda.is_available() else []),
                           index=0)
 
@@ -598,7 +659,8 @@ with st.sidebar:
     st.subheader("파일 선택")
     source = st.radio(
         "불러올 방식",
-        ["샘플 폴더에서 선택", "예측 사례 목록에서 선택 (FP/FN/경계선)", "직접 업로드"],
+        ["샘플 폴더에서 선택", "예측 사례 목록에서 선택 (FP/FN/경계선)",
+         "애매/분류어려움 목록에서 선택", "직접 업로드"],
     )
 
     rep: MeshRep | None = None
@@ -676,7 +738,63 @@ with st.sidebar:
                     sel_name = sub.iloc[labels_ui.index(pick)]["name"]
                     rep = parse_sample(sel_name)
 
-    else:
+    elif source == "애매/분류어려움 목록에서 선택":
+        with st.spinner("계산 중..."):
+            amb_df = load_ambiguous_predictions(run_dir, device_str)
+        if amb_df.empty:
+            st.warning("학습에서 제외된(애매/분류어려움) 사례를 찾지 못했습니다.")
+        else:
+            view = st.radio(
+                "무엇을 볼지",
+                ["애매 (확실 아님, cls 0/1)", "분류 어려움 (cls=2)", "둘 다"],
+                help="애매=사람이 정상/비정상 판정에 확신이 없었던 것. "
+                    "분류 어려움=정상/비정상 자체를 정하지 못한 것.",
+            )
+            if view == "애매 (확실 아님, cls 0/1)":
+                sub = amb_df[(amb_df["ambig"] == 1) & (amb_df["cls"] != 2)]
+            elif view == "분류 어려움 (cls=2)":
+                sub = amb_df[amb_df["cls"] == 2]
+            else:
+                sub = amb_df
+
+            known = sub[sub["agree"].notna()]
+            if len(known):
+                acc = known["agree"].mean()
+                st.caption(
+                    f"현재 선택 {len(sub)}개 중 원 라벨이 있는 {len(known)}개에서 "
+                    f"**모델-라벨 일치율 {acc:.1%}**  "
+                    f"(참고용 — 사람도 판단이 어려웠던 사례라 '정답'이 불확실합니다)"
+                )
+            else:
+                st.caption(f"현재 선택 {len(sub)}개 (전부 분류 어려움이라 일치율 계산 불가)")
+
+            if sub.empty:
+                st.info("해당하는 사례가 없습니다.")
+            else:
+                cls_tag = {0: "정상", 1: "비정상", 2: "분류어려움"}
+                labels_ui = [
+                    f"{r.name}  (원 분류 {cls_tag[r.cls]}"
+                    f"{', 애매' if r.ambig else ''}, 모델예측 "
+                    f"{'비정상' if r.pred == 1 else '정상'} p={r.prob:.3f})"
+                    for r in sub.itertuples()
+                ]
+                query3 = st.text_input(
+                    "검색 (이름 부분 문자열, 예: 0250)", key="search_amb",
+                )
+                labels_ui_f = (
+                    [l for l in labels_ui if query3.lower() in l.lower()]
+                    if query3 else labels_ui
+                )
+                if not labels_ui_f:
+                    st.warning(f"'{query3}' 를 포함하는 사례가 없습니다.")
+                else:
+                    pick = st.selectbox(
+                        f"애매/분류어려움 사례 ({len(labels_ui_f)}개)", labels_ui_f, index=0
+                    )
+                    sel_name = sub.iloc[labels_ui.index(pick)]["name"]
+                    rep = parse_sample(sel_name)
+
+    elif source == "직접 업로드":
         bdf_file = st.file_uploader(".bdf 파일", type=["bdf"])
         json_file = st.file_uploader(".json 파일 (선택 — 없으면 전 절점 외부연결=False)",
                                      type=["json"])
