@@ -1,0 +1,9 @@
+# 이 앱(src/app.py)이 실제로 쓰는 패키지만 남긴 최소 목록.
+# torch / torch-geometric 은 CUDA 빌드가 PC마다 달라서 여기 안 넣었다 —
+# 실행.bat 가 CPU 전용 버전을 별도로 설치한다.
+numpy>=2.0
+pandas>=2.2
+plotly>=6.0
+scikit-learn>=1.4
+streamlit>=1.50
+openpyxl>=3.1
