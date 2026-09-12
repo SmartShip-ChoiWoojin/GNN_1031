@@ -294,7 +294,14 @@ def main(argv: list[str] | None = None) -> int:
     for fold, (tr_idx, te_idx) in enumerate(folds, start=1):
         print(f"\n── fold {fold}/{args.folds}  학습 {len(tr_idx)} / 평가 {len(te_idx)}")
         y_te, p_te, m, ckpt = train_one_fold(
-            args, arrays, labels, names, tr_idx, te_idx, device, fold
+            args=args,
+            arrays=arrays,
+            labels=labels,
+            names=names,
+            tr_idx=tr_idx,
+            te_idx=te_idx,
+            device=device,
+            fold=fold,
         )
         oof[te_idx] = p_te
         per_fold.append(m)
