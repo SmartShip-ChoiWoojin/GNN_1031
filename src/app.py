@@ -49,8 +49,14 @@ from explain import (
     load_result,
     relative_importance,
 )
+from fasoo_drm import setting_fasoo
 from labels import load_label_table
 from meshrep import MeshRep
+
+# 라벨 엑셀 등 fasoo 로 암호화된 파일을 읽어야 하므로, 파일을 하나라도 열기 전에
+# 프로그램 시작 시 한 번만 해제한다. (setting_fasoo 안에 중복 호출 가드가 있어서
+# Streamlit 이 위젯 조작마다 이 스크립트를 다시 실행해도 실제 해제는 한 번만 일어난다.)
+setting_fasoo()
 
 st.set_page_config(page_title="메쉬 정상/비정상 뷰어", layout="wide")
 

@@ -99,4 +99,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # runs/*/result.json 도 DRM 활성 상태에서 만들어졌으면 암호가 걸려 있다.
+    from fasoo_drm import setting_fasoo
+
+    setting_fasoo()
     sys.exit(main())

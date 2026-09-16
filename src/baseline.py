@@ -204,4 +204,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # 사내 PC 는 라벨 엑셀·데이터 파일에 암호가 걸리므로 파일을 열기 전에 해제한다.
+    from fasoo_drm import setting_fasoo
+
+    setting_fasoo()
     sys.exit(main())

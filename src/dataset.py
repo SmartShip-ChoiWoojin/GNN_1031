@@ -183,6 +183,11 @@ def feature_dims(kind: str) -> tuple[int, int, int]:
 if __name__ == "__main__":
     import argparse
 
+    # 사내 PC 는 라벨 엑셀·데이터 파일에 암호가 걸리므로 파일을 열기 전에 해제한다.
+    from fasoo_drm import setting_fasoo
+
+    setting_fasoo()
+
     ap = argparse.ArgumentParser(description="그래프 캐시 생성 및 점검")
     ap.add_argument("--graph", choices=graphs.GRAPH_KINDS, default="elem")
     ap.add_argument("--force", action="store_true")
