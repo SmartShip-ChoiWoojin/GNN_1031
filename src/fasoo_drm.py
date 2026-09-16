@@ -44,7 +44,7 @@ def setting_fasoo() -> bool:
 
     if not os.path.isfile(FASOO_DLL):
         if not _checked:
-            print(f"[fasoo_drm] {FASOO_DLL} 없음 — FASOO 미설치 환경으로 보고 건너뜀")
+            print(f"[fasoo_drm] {FASOO_DLL} 없음 - FASOO 미설치 환경으로 보고 건너뜀")
             _checked = True
         return False
 
@@ -54,5 +54,5 @@ def setting_fasoo() -> bool:
         raise Exception("암호화 해제를 하지 못했습니다. ")
 
     _enabled = True
-    print("[fasoo_drm] DRM 해제 완료 — 암호화된 파일을 읽을 수 있습니다")
+    print("[fasoo_drm] DRM 해제 완료 - 암호화된 파일을 읽을 수 있습니다")
     return True

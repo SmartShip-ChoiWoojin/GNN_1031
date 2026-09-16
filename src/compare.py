@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
 
     best = rows[0]
     cm = np.array(best["cm"])
-    print(f"\n최고 ({a.sort} 기준): {best['tag']}  —  {best['desc']}")
+    print(f"\n최고 ({a.sort} 기준): {best['tag']}  -  {best['desc']}")
     print("  혼동행렬 (out-of-fold, 행=실제, 열=예측)")
     print(f"    정상   {cm[0, 0]:5d} {cm[0, 1]:5d}   (오탐 {cm[0, 1]})")
     print(f"    비정상 {cm[1, 0]:5d} {cm[1, 1]:5d}   (미탐 {cm[1, 0]})")

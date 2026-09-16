@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print()
     print("=" * 70)
-    print("기준선 확정 — train.py 의 BASELINE 상수에 이 값을 넣는다")
+    print("기준선 확정 - train.py 의 BASELINE 상수에 이 값을 넣는다")
     print(f"  fold 평균: AUC {full['auc_fold']:.4f} / ACC {full['acc_fold']:.4f}"
           f" / F1 {full['f1_fold']:.4f}")
     print(f"  종합(OOF): AUC {full['auc_oof']:.4f} / ACC {full['acc_oof']:.4f}"

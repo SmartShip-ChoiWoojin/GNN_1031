@@ -413,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             print("    " + line)
         line_top = top_line_elements(rep, imp, k=3)
         if line_top:
-            print(f"  중요도 상위 1D (참고용 — 결함 판정 아님):")
+            print(f"  중요도 상위 1D (참고용 - 결함 판정 아님):")
             for line in line_top:
                 print("    " + line)
 
