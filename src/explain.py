@@ -73,10 +73,12 @@ def fold_assignment(names: list[str], labels: list[int], args: SimpleNamespace) 
     return out
 
 
-def load_fold_model(run_dir: str, fold: int, device: torch.device):
-    """(model, normalizer, args, platt) 를 복원한다."""
-    ck = torch.load(os.path.join(run_dir, f"fold{fold}.pt"), map_location=device,
-                    weights_only=False)
+def load_checkpoint(path: str, device: torch.device):
+    """체크포인트 파일 하나에서 (model, normalizer, args, platt) 를 복원한다.
+
+    fold 별 모델(fold*.pt)과 배포용 단일 모델(full.pt) 이 같은 형식이라 한 함수로 읽는다.
+    """
+    ck = torch.load(path, map_location=device, weights_only=False)
     args = SimpleNamespace(**ck["args"])
     model = build_model(
         ck["d_node"], ck["d_edge"], ck["d_graph"], args,
@@ -89,6 +91,16 @@ def load_fold_model(run_dir: str, fold: int, device: torch.device):
     model.eval()
     norm = DS.NormalizerSet.from_state_dict(ck["normalizer"])
     return model, norm, args, tuple(ck.get("platt", (1.0, 0.0)))
+
+
+def load_fold_model(run_dir: str, fold: int, device: torch.device):
+    """fold 별 모델을 복원한다 (5-fold 실행에서만 쓴다)."""
+    return load_checkpoint(os.path.join(run_dir, f"fold{fold}.pt"), device)
+
+
+def load_full_model(run_dir: str, device: torch.device):
+    """배포용 단일 모델(full.pt) 을 복원한다."""
+    return load_checkpoint(os.path.join(run_dir, "full.pt"), device)
 
 
 # ──────────────────────────────────────────────────────────────────────────

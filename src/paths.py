@@ -12,7 +12,7 @@ ROOT = os.path.dirname(SRC_DIR)
 #: "SN2592_FWD_Clean"이 라벨 엑셀 4000행과 완전히 일치하는 전체 데이터셋이다
 #: (discover_pairs 로 확인: bdf/json 짝 4000개, 누락 파일 0개).
 FE_DIR = os.path.join(ROOT, "SN2592_FWD_Clean")
-LABEL_XLSX = os.path.join(ROOT, "fe model 1D index 0721.xlsx")
+LABEL_XLSX = os.path.join(ROOT, "fe model 1D index 0918.xlsx")
 
 # 그래프 변환 캐시와 학습 실행 결과가 쌓이는 디렉토리
 CACHE_DIR = os.path.join(ROOT, "cache") # pickle

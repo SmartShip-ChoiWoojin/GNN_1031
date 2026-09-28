@@ -46,6 +46,7 @@ from explain import (
     attention_for,
     fold_assignment,
     load_fold_model,
+    load_full_model,
     load_result,
     relative_importance,
 )
@@ -101,7 +102,12 @@ def load_run_metrics(run_dir: str) -> dict | None:
         return None
     with open(path, "r", encoding="utf-8") as fh:
         res = json.load(fh)
-    return {"fold_mean": res["fold_mean"], "n_samples": res["n_samples"]}
+    return {
+        "mode": res.get("mode", "cv"),
+        "fold_mean": res.get("fold_mean"),
+        "n_samples": res.get("n_samples"),
+        "label_xlsx": res.get("label_xlsx"),
+    }
 
 
 @st.cache_resource(show_spinner=False)
@@ -113,14 +119,27 @@ def get_run_context(run_dir: str):
     if args.graph == "elem":
         opts = {"corner_edges": not args.no_corner_edges, "include_lines": not args.no_lines}
     names, labels, arrays = DS.build_cache(args.graph, opts=opts, verbose=False)
-    fold_of = fold_assignment(names, labels, args)
+    # 배포용 단일 모델이 있으면 fold 배정을 아예 계산하지 않는다. 그 계산은 학습대상
+    # 목록의 순서에 의존해서, 목록이 조금만 달라져도 담당 모델이 바뀌던 원인이었다.
+    fold_of = None if has_full_model(run_dir) else fold_assignment(names, labels, args)
     return args, names, labels, arrays, fold_of, opts
+
+
+def has_full_model(run_dir: str) -> bool:
+    """전 학습대상으로 학습한 배포용 단일 모델이 있는가."""
+    return os.path.isfile(os.path.join(run_dir, "full.pt"))
 
 
 @st.cache_resource(show_spinner=False)
 def get_fold_model(run_dir: str, fold: int, device_str: str):
     device = torch.device(device_str)
     return load_fold_model(run_dir, fold, device)
+
+
+@st.cache_resource(show_spinner=False)
+def get_full_model(run_dir: str, device_str: str):
+    device = torch.device(device_str)
+    return load_full_model(run_dir, device)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -211,12 +230,17 @@ def load_ambiguous_predictions(run_dir: str, device_str: str) -> pd.DataFrame:
         rep = MeshRep(load_raw_mesh(bdf, js))
         ga = graphs.build(rep, args.graph, **opts)
 
-        probs = []
-        for f in range(1, args.folds + 1):
-            model, norm, _, platt = get_fold_model(run_dir, f, device_str)
+        if has_full_model(run_dir):
+            model, norm, _, platt = get_full_model(run_dir, device_str)
             logit, _ = attention_for(ga, r.name, 0, model, norm, device)
-            probs.append(1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1]))))
-        prob = float(np.mean(probs))
+            prob = float(1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1]))))
+        else:
+            probs = []
+            for f in range(1, args.folds + 1):
+                model, norm, _, platt = get_fold_model(run_dir, f, device_str)
+                logit, _ = attention_for(ga, r.name, 0, model, norm, device)
+                probs.append(1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1]))))
+            prob = float(np.mean(probs))
         pred = int(prob > 0.5)
         rows.append(dict(
             name=r.name, cls=int(r.cls), ambig=int(r.ambig), prob=prob, pred=pred,
@@ -237,7 +261,16 @@ def predict(rep: MeshRep, run_dir: str, device_str: str) -> dict:
     ga = graphs.build(rep, args.graph, **opts)
 
     detail: dict = {}
-    if rep.name in names:
+    if has_full_model(run_dir):
+        # 어떤 파일이든, 이름이 무엇이든 항상 같은 모델 하나로 판정한다.
+        model, norm, _, platt = get_full_model(run_dir, device_str)
+        logit, alpha = attention_for(ga, rep.name, 0, model, norm, device)
+        prob = 1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1])))
+        in_train = rep.name in names
+        truth = labels[names.index(rep.name)] if in_train else None
+        mode = "전체 학습 단일 모델 (어느 PC에서 열어도 동일한 결과)"
+        detail = dict(kind="full", logit=float(logit), platt=platt, in_train=in_train)
+    elif rep.name in names:
         idx = names.index(rep.name)
         fold = int(fold_of[idx])
         model, norm, _, platt = get_fold_model(run_dir, fold, device_str)
@@ -643,15 +676,27 @@ if not runs:
 
 with st.sidebar:
     st.header("설정")
-    default_run = "final" if "final" in runs else runs[0]
+    # 배포용 단일 모델(full.pt)이 있는 실행을 우선 고른다 - 그래야 어느 PC 에서
+    # 열어도 같은 판정이 나온다. 없으면 예전 5-fold 실행으로 되돌아간다.
+    _full_runs = [r for r in runs if has_full_model(os.path.join(paths.RUNS_DIR, r))]
+    if _full_runs:
+        default_run = _full_runs[0]
+    else:
+        default_run = "final" if "final" in runs else runs[0]
     run_name = st.selectbox("모델 실행", runs, index=runs.index(default_run))
     run_dir = os.path.join(paths.RUNS_DIR, run_name)
 
     run_metrics = load_run_metrics(run_dir)
-    if run_metrics:
+    if run_metrics and run_metrics["mode"] == "full":
+        st.caption(
+            f"**전체 학습 단일 모델** (학습대상 {run_metrics['n_samples']}개). "
+            f"fold 분할이 없어 어느 PC에서 열어도 같은 결과가 나옵니다. "
+            f"성능 수치는 같은 설정의 5-fold 실행에서 측정합니다."
+        )
+    elif run_metrics and run_metrics["fold_mean"]:
         fm = run_metrics["fold_mean"]
         st.caption(
-            f"이 실행의 5-fold 성능 — AUC **{fm['auc']:.4f}** · "
+            f"이 실행의 5-fold 성능 - AUC **{fm['auc']:.4f}** · "
             f"ACC **{fm['acc']:.4f}** · F1 **{fm['f1']:.4f}** "
             f"(학습대상 {run_metrics['n_samples']}개, fold 평균)"
         )
@@ -687,7 +732,8 @@ with st.sidebar:
         err_df = load_oof_errors(run_dir)
         if err_df.empty:
             st.warning(
-                "이 실행에는 oof.csv 가 없습니다 — train.py 로 학습한 실행만 가능합니다."
+                "이 실행에는 oof.csv 가 없습니다. 오분류 목록은 5-fold 실행에서만 "
+                "볼 수 있습니다 (왼쪽 '모델 실행'에서 5-fold 실행을 선택하세요)."
             )
         else:
             kind = st.radio(
@@ -870,7 +916,21 @@ with st.expander("예측 상세 (정확한 확률·확신도)", expanded=False):
             f"{'✅ 일치' if (result['truth'] == 1) == (p > 0.5) else '❌ 불일치'}"
         )
     detail = result.get("detail", {})
-    if detail.get("kind") == "single":
+    if detail.get("kind") == "full":
+        a, b = detail["platt"]
+        st.markdown(
+            f"- **평가에 쓴 모델**: 전체 학습대상으로 학습한 **단일 모델** "
+            f"(fold 분할 없음 - 어느 PC에서 열어도 같은 값이 나옵니다)\n"
+            f"- **보정 전 원시 점수(logit)**: `{detail['logit']:.4f}`\n"
+            f"- **확률 보정식**: `p = sigmoid({a:.3f} x logit + {b:.3f})`"
+        )
+        if detail.get("in_train"):
+            st.warning(
+                "이 메쉬는 **이 모델의 학습에 쓰인 메쉬**입니다. 모델이 이미 정답을 본 "
+                "상태라 실제 라벨과 잘 맞는 것이 당연하며, 이 결과를 모델의 성능 근거로 "
+                "삼으면 안 됩니다. 성능은 별도 5-fold 실행 결과로 보고합니다."
+            )
+    elif detail.get("kind") == "single":
         a, b = detail["platt"]
         st.markdown(
             f"- **평가에 쓴 모델**: fold {detail['fold']} (이 메쉬를 학습에 쓰지 않은 모델)\n"

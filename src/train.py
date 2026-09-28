@@ -216,6 +216,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--epochs", type=int, default=200)
     ap.add_argument("--patience", type=int, default=40)
     ap.add_argument("--folds", type=int, default=5)
+    ap.add_argument("--full", action="store_true",
+                    help="fold 로 나누지 않고 전 학습대상으로 모델 하나만 학습한다 "
+                         "(배포용). 어디서 실행하든 같은 모델이라 판정이 흔들리지 않는다.")
     ap.add_argument("--val-frac", type=float, default=0.15,
                     help="fold 학습분에서 내부 val 로 떼어낼 비율")
     ap.add_argument("--seed", type=int, default=0)
@@ -286,6 +289,53 @@ def main(argv: list[str] | None = None) -> int:
     probe = build_model(d_node, d_edge, d_graph, args)
     print(f"[train] 피처 {d_node}/{d_edge}/{d_graph}차원, 파라미터 {count_params(probe):,}개")
     del probe
+
+    if args.full:
+        # 배포용 단일 모델. fold 를 쓰지 않으므로 "이 메쉬는 몇 번 모델이 보나"를
+        # 실행 시점에 다시 계산할 필요가 없다 -- 그 계산이 PC 마다 어긋나면서
+        # 같은 메쉬에 다른 판정이 나오던 문제가 구조적으로 사라진다.
+        all_idx = np.arange(len(y))
+        print("")
+        print(f"-- 전체 학습 (fold 분할 없음): 학습대상 {len(all_idx)}개")
+        print(f"   이 중 {args.val_frac:.0%} 는 조기종료·확률보정용으로만 쓴다")
+        t0 = time.time()
+        _, _, m, ckpt = train_one_fold(
+            args=args,
+            arrays=arrays,
+            labels=labels,
+            names=names,
+            tr_idx=all_idx,
+            te_idx=all_idx,
+            device=device,
+            fold=0,
+        )
+        ckpt["mode"] = "full"
+        torch.save(ckpt, os.path.join(run_dir, "full.pt"))
+
+        print("")
+        print("=" * 72)
+        print(f"{tag}  전체 학습 완료 ({len(y)}개, {time.time() - t0:.0f}s)")
+        print("=" * 72)
+        print(f"  내부 val AUC : {m['best_val_auc']:.4f}  (@ epoch {m['best_epoch']})")
+        print(f"  학습셋 재현   : AUC {m['auc']:.4f}  ACC {m['acc']:.4f}  F1 {m['f1']:.4f}")
+        print("  * 학습셋 재현 수치는 자기가 배운 데이터를 다시 맞힌 것이라 낙관적이다.")
+        print("    이 모델의 실제 성능은 같은 설정의 5-fold 실행 결과로 보고한다.")
+
+        result = {
+            "tag": tag,
+            "mode": "full",
+            "args": vars(args),
+            "metrics": m,
+            "n_samples": int(len(y)),
+            "label_xlsx": os.path.basename(paths.LABEL_XLSX),
+        }
+        with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as fh:
+            json.dump(result, fh, ensure_ascii=False, indent=2)
+        with open(os.path.join(run_dir, "train_names.txt"), "w", encoding="utf-8") as fh:
+            fh.write("\n".join(names))
+        print("")
+        print(f"저장: {run_dir}  (full.pt)")
+        return 0
 
     oof = np.full(len(y), np.nan)
     per_fold: list[dict] = []

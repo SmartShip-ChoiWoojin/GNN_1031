@@ -42,6 +42,15 @@ def _cache_key(kind: str, opts: dict) -> str:
     return f"graphs_{kind}_{h}.pkl"
 
 
+def _as_store(blob: dict) -> dict:
+    """캐시 블롭을 {이름: 그래프} 로 통일한다 (구버전 캐시도 그대로 재사용)."""
+    if blob.get("version") == 2:
+        return dict(blob["graphs"])
+    # v1: {"names": [...], "labels": [...], "graphs": [...]} — 라벨까지 같이 저장했었다.
+    # 라벨은 버리고 그래프만 살린다. 라벨은 항상 엑셀에서 새로 읽어야 하기 때문이다.
+    return dict(zip(blob["names"], blob["graphs"]))
+
+
 def build_cache(
     kind: str,
     samples: list[Sample] | None = None,
@@ -51,6 +60,11 @@ def build_cache(
 ) -> tuple[list[str], list[int], list]:
     """전 모델을 그래프로 변환해 캐시한다.
 
+    캐시에는 **그래프만** 담는다 — 그래프는 bdf/json 에서만 나오므로 라벨과 무관하다.
+    이름/라벨은 매번 :func:`list_samples` 로 엑셀에서 새로 읽는다. 예전에는 라벨까지
+    캐시에 함께 저장해서, 라벨 엑셀을 갈아끼워도 캐시가 있으면 옛 라벨이 조용히
+    그대로 쓰이는 문제가 있었다 (학습 대상 목록이 달라지면 fold 배정까지 바뀐다).
+
     Returns:
         (names, labels, graph_arrays) — 세 리스트는 인덱스가 대응한다.
     """
@@ -58,33 +72,43 @@ def build_cache(
     opts = opts or {}
     path = os.path.join(paths.CACHE_DIR, _cache_key(kind, opts))
 
+    samples = samples if samples is not None else list_samples(verbose=verbose)
+
+    store: dict = {}
     if os.path.exists(path) and not force:
         with open(path, "rb") as fh:
-            blob = pickle.load(fh)
+            store = _as_store(pickle.load(fh))
         if verbose:
-            print(f"[dataset] 캐시 사용: {os.path.basename(path)} ({len(blob['names'])}개)")
-        return blob["names"], blob["labels"], blob["graphs"]
-
-    samples = samples if samples is not None else list_samples(verbose=verbose)
-    if verbose:
-        print(f"[dataset] '{kind}' 그래프 변환 시작 (옵션 {opts})")
+            print(f"[dataset] 캐시 사용: {os.path.basename(path)} (그래프 {len(store)}개 보유)")
 
     t0 = time.time()
     names, labels, arrays = [], [], []
+    n_new = 0
     for i, s in enumerate(samples, start=1):
-        rep = MeshRep(load_raw_mesh(s.bdf, s.json))
-        arrays.append(graphs.build(rep, kind, **opts))
+        ga = store.get(s.name)
+        if ga is None:
+            rep = MeshRep(load_raw_mesh(s.bdf, s.json))
+            ga = graphs.build(rep, kind, **opts)
+            store[s.name] = ga
+            n_new += 1
         names.append(s.name)
         labels.append(s.cls)
-        if verbose and i % 400 == 0:
+        arrays.append(ga)
+        if verbose and n_new and i % 400 == 0:
             print(f"  ... {i}/{len(samples)}  ({time.time() - t0:.1f}s)")
 
-    with open(path, "wb") as fh:
-        pickle.dump({"names": names, "labels": labels, "graphs": arrays}, fh)
+    if n_new or not os.path.exists(path):
+        with open(path, "wb") as fh:
+            pickle.dump({"version": 2, "graphs": store}, fh)
+        if verbose:
+            print(f"[dataset] 그래프 {n_new}개 새로 변환, {time.time() - t0:.1f}s "
+                  f"→ {os.path.basename(path)}")
+
     if verbose:
         nn = np.array([g.n_node for g in arrays])
         ne = np.array([g.n_edge for g in arrays])
-        print(f"[dataset] 완료 {len(arrays)}개, {time.time() - t0:.1f}s → {os.path.basename(path)}")
+        print(f"[dataset] 사용 {len(arrays)}개 "
+              f"(정상 {labels.count(0)} / 비정상 {labels.count(1)})")
         print(f"  노드 평균 {nn.mean():.1f} (최소 {nn.min()}, 최대 {nn.max()})")
         print(f"  엣지 평균 {ne.mean():.1f} (최소 {ne.min()}, 최대 {ne.max()})")
         print(f"  노드 피처 {arrays[0].x.shape[1]}차원 / 엣지 피처 {arrays[0].edge_attr.shape[1]}차원"
