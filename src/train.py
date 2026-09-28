@@ -114,21 +114,27 @@ def train_one_fold(
     """한 fold 학습. Returns (test 정답, test 확률, 지표, 체크포인트)."""
     y_all = np.array(labels)
 
-    # 학습분에서 내부 val 을 떼어낸다 — test 조각은 early stopping 에 쓰지 않는다
-    inner_tr, inner_val = train_test_split(
-        tr_idx, test_size=args.val_frac, random_state=args.seed + fold,
-        stratify=y_all[tr_idx],
-    )
+    # 학습분에서 내부 val 을 떼어낸다 - test 조각은 early stopping 에 쓰지 않는다.
+    # --val-frac 0 이면 아예 떼지 않고 받은 데이터를 전부 가중치 학습에 쓴다. 대신
+    # 언제 멈출지 알려줄 신호가 없으므로 --epochs 만큼 정확히 돌고 끝낸다.
+    use_val = float(args.val_frac) > 0
+    if use_val:
+        inner_tr, inner_val = train_test_split(
+            tr_idx, test_size=args.val_frac, random_state=args.seed + fold,
+            stratify=y_all[tr_idx],
+        )
+    else:
+        inner_tr, inner_val = tr_idx, tr_idx[:0]
 
     # 정규화 통계는 내부 학습분에서만 적합
     norm = DS.NormalizerSet(args.graph).fit(arrays, inner_tr)
 
     ds_tr = DS.make_dataset(arrays, labels, names, inner_tr, norm)
-    ds_val = DS.make_dataset(arrays, labels, names, inner_val, norm)
+    ds_val = DS.make_dataset(arrays, labels, names, inner_val, norm) if use_val else []
     ds_te = DS.make_dataset(arrays, labels, names, te_idx, norm)
 
     ld_tr = DataLoader(ds_tr, batch_size=args.batch_size, shuffle=True, drop_last=True)
-    ld_val = DataLoader(ds_val, batch_size=args.batch_size * 4)
+    ld_val = DataLoader(ds_val, batch_size=args.batch_size * 4) if use_val else None
     ld_te = DataLoader(ds_te, batch_size=args.batch_size * 4)
 
     d_node, d_edge, d_graph = DS.feature_dims(args.graph)
@@ -159,6 +165,15 @@ def train_one_fold(
             tot += loss.detach().item() * batch.num_graphs
         sched.step()
 
+        if not use_val:
+            # 검증셋이 없으면 멈출 시점을 판단할 근거가 없다. 지정한 epoch 만큼 돌고
+            # 마지막 상태를 그대로 쓴다.
+            best_epoch = epoch
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            if args.verbose and epoch % 20 == 0:
+                print(f"    epoch {epoch:3d}  loss {tot / len(ds_tr):.4f}  (검증 없음)")
+            continue
+
         yv, lv = evaluate(model, ld_val, device)
         auc = roc_auc_score(yv, lv)
         if auc > best_auc:
@@ -177,11 +192,30 @@ def train_one_fold(
             break
 
     assert best_state is not None
-    model.load_state_dict(best_state)
+    if getattr(args, "final_epoch", False):
+        # 과적합 시연용: 검증셋이 고른 최고 시점을 버리고 마지막 상태를 그대로 쓴다.
+        best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    else:
+        model.load_state_dict(best_state)
 
-    # 내부 val 로 Platt 스케일링을 적합해 fold 간 확률 스케일을 맞춘다
-    yv, lv = evaluate(model, ld_val, device)
-    a, b = fit_platt(lv, yv)
+    # 학습분 자체 성능 - "학습 데이터는 100% 맞아야 하나"를 확인하는 용도
+    y_tr_in, l_tr_in = evaluate(model, DataLoader(ds_tr, batch_size=args.batch_size * 4), device)
+    m_train = metrics(y_tr_in, 1.0 / (1.0 + np.exp(-l_tr_in)))
+
+    # 내부 val 로 Platt 스케일링을 적합해 fold 간 확률 스케일을 맞춘다.
+    # 검증셋이 없으면 보정 계수를 구할 데이터가 없다 - 학습분으로 맞추면 과신하는
+    # 확률이 나오므로, 앞서 학습한 모델의 계수를 그대로 가져온다(--platt-from).
+    if use_val:
+        yv, lv = evaluate(model, ld_val, device)
+        a, b = fit_platt(lv, yv)
+    elif getattr(args, "platt_from", None):
+        ck_prev = torch.load(args.platt_from, map_location="cpu", weights_only=False)
+        a, b = tuple(ck_prev.get("platt", (1.0, 0.0)))
+        print(f"    Platt 계수를 {os.path.basename(args.platt_from)} 에서 가져옴: "
+              f"a={a:.3f} b={b:.3f}")
+    else:
+        a, b = 1.0, 0.0
+        print("    Platt 보정 없음 (계수 a=1, b=0) - 확률값의 절대 수치는 신뢰하지 말 것")
 
     y_te, l_te = evaluate(model, ld_te, device)
     p_te = apply_platt(l_te, a, b)
@@ -189,6 +223,8 @@ def train_one_fold(
     m["best_val_auc"] = float(best_auc)
     m["best_epoch"] = best_epoch
     m["platt_a"], m["platt_b"] = a, b
+    m["train_auc"] = m_train["auc"]
+    m["train_acc"] = m_train["acc"]
 
     ckpt = {
         "model_state": best_state,
@@ -216,6 +252,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--epochs", type=int, default=200)
     ap.add_argument("--patience", type=int, default=40)
     ap.add_argument("--folds", type=int, default=5)
+    ap.add_argument("--platt-from", default=None,
+                    help="확률 보정(Platt) 계수를 가져올 체크포인트 경로. --val-frac 0 으로 "
+                         "검증셋 없이 학습할 때, 보정 계수를 구할 데이터가 없으므로 "
+                         "앞서 학습한 모델의 계수를 그대로 쓴다.")
+    ap.add_argument("--final-epoch", action="store_true",
+                    help="조기종료를 끄고 마지막 epoch 가중치를 쓴다 (과적합 시연용). "
+                         "검증셋으로 고른 최고 시점 대신 학습 데이터에 끝까지 맞춘 모델.")
     ap.add_argument("--full", action="store_true",
                     help="fold 로 나누지 않고 전 학습대상으로 모델 하나만 학습한다 "
                          "(배포용). 어디서 실행하든 같은 모델이라 판정이 흔들리지 않는다.")
@@ -297,7 +340,10 @@ def main(argv: list[str] | None = None) -> int:
         all_idx = np.arange(len(y))
         print("")
         print(f"-- 전체 학습 (fold 분할 없음): 학습대상 {len(all_idx)}개")
-        print(f"   이 중 {args.val_frac:.0%} 는 조기종료·확률보정용으로만 쓴다")
+        if float(args.val_frac) > 0:
+            print(f"   이 중 {args.val_frac:.0%} 는 조기종료·확률보정용으로만 쓴다")
+        else:
+            print(f"   검증셋 없이 전부 가중치 학습에 쓴다 ({args.epochs} epoch 고정)")
         t0 = time.time()
         _, _, m, ckpt = train_one_fold(
             args=args,
@@ -316,7 +362,10 @@ def main(argv: list[str] | None = None) -> int:
         print("=" * 72)
         print(f"{tag}  전체 학습 완료 ({len(y)}개, {time.time() - t0:.0f}s)")
         print("=" * 72)
-        print(f"  내부 val AUC : {m['best_val_auc']:.4f}  (@ epoch {m['best_epoch']})")
+        if float(args.val_frac) > 0:
+            print(f"  내부 val AUC : {m['best_val_auc']:.4f}  (@ epoch {m['best_epoch']})")
+        else:
+            print(f"  검증셋 없음   : {args.epochs} epoch 고정 학습, 전 데이터 사용")
         print(f"  학습셋 재현   : AUC {m['auc']:.4f}  ACC {m['acc']:.4f}  F1 {m['f1']:.4f}")
         print("  * 학습셋 재현 수치는 자기가 배운 데이터를 다시 맞힌 것이라 낙관적이다.")
         print("    이 모델의 실제 성능은 같은 설정의 5-fold 실행 결과로 보고한다.")
