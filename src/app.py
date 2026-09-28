@@ -729,6 +729,13 @@ with st.sidebar:
             rep = parse_sample(name)
 
     elif source == "예측 사례 목록에서 선택 (FP/FN/경계선)":
+        if has_full_model(run_dir):
+            st.caption(
+                "이 목록의 확률은 같은 설정의 **5-fold 실행에서 나온 정직한 값**입니다. "
+                "배포 모델은 이 메쉬들을 학습에 썼기 때문에 자기 점수로는 자기 오답을 "
+                "찾을 수 없어, 오분류 탐색에는 이 값을 씁니다. 메쉬를 고르면 화면의 "
+                "예측값은 배포 모델이 다시 계산한 값(학습에 쓴 메쉬라 낙관적)입니다."
+            )
         err_df = load_oof_errors(run_dir)
         if err_df.empty:
             st.warning(
