@@ -94,6 +94,51 @@ def label_lookup() -> dict[str, tuple[int, int]]:
     return {r.name: (int(r.cls), int(r.ambig)) for r in df.itertuples()}
 
 
+LABEL_TAGS = {0: "정상", 1: "비정상", 2: "분류어려움"}
+
+
+@st.cache_data
+def split_samples() -> tuple[list[str], list[str]]:
+    """폴더의 모델을 (학습에 쓴 것, 학습에 안 쓴 것) 으로 나눈다.
+
+    학습 대상은 '확실 & 분류 가능' 인 것뿐이라, 나머지(애매/분류어려움)는 모델이
+    한 번도 보지 못한 데이터다. 그래서 그쪽이 곧 test 집합이 된다.
+    """
+    paired = set(available_samples())
+    tbl = load_label_table(paths.LABEL_XLSX)
+    tr, te = [], []
+    for r in tbl.itertuples():
+        if r.name in paired:
+            (tr if r.trainable else te).append(r.name)
+    return sorted(tr), sorted(te)
+
+
+def label_tag(name: str) -> str:
+    """이름 옆에 괄호로 붙일 라벨 표시 - (정상) (비정상) (애매·비정상) (분류어려움)."""
+    lab = label_lookup().get(name)
+    if lab is None:
+        return "(라벨 없음)"
+    cls, ambig = lab
+    if cls == 2:
+        return "(분류어려움·애매)" if ambig else "(분류어려움)"
+    return f"(애매·{LABEL_TAGS[cls]})" if ambig else f"({LABEL_TAGS[cls]})"
+
+
+def pick_by_label(names: list[str], key: str, title: str) -> str | None:
+    """이름 옆에 라벨을 붙여 고르게 하고 고른 이름을 돌려준다."""
+    query = st.text_input(
+        "검색 (부분 문자열, 예: 0250)", key=key,
+        help="입력한 글자를 이름 어디에든 포함하는 파일만 드롭다운에 남습니다.",
+    )
+    shown = [n for n in names if query.lower() in n.lower()] if query else names
+    if not shown:
+        st.warning(f"'{query}' 를 포함하는 파일이 없습니다.")
+        return None
+    disp = [f"{n}  {label_tag(n)}" for n in shown]
+    pick = st.selectbox(f"{title} ({len(shown)}개)", disp, index=0)
+    return shown[disp.index(pick)]
+
+
 @st.cache_data
 def load_run_metrics(run_dir: str) -> dict | None:
     """train.py 가 저장한 result.json 에서 fold 평균 성능을 읽는다."""
@@ -708,27 +753,71 @@ with st.sidebar:
 
     st.divider()
     st.subheader("파일 선택")
+    train_names, test_names = split_samples()
+    SRC_TRAIN = f"학습 데이터 train ({len(train_names)}개)"
+    SRC_TEST = f"테스트 데이터 test ({len(test_names)}개)"
+    SRC_ERR = "예측 사례 목록에서 선택 (FP/FN/경계선)"
+    SRC_UPLOAD = "직접 업로드"
+
     source = st.radio(
-        "불러올 방식",
-        ["샘플 폴더에서 선택", "예측 사례 목록에서 선택 (FP/FN/경계선)",
-         "애매/분류어려움 목록에서 선택", "직접 업로드"],
+        "불러올 방식", [SRC_TRAIN, SRC_TEST, SRC_ERR, SRC_UPLOAD],
+        help="train=확실한 라벨이라 모델이 학습에 쓴 메쉬. "
+             "test=애매하거나 분류가 어려워 학습에서 제외한 메쉬로, 모델이 한 번도 "
+             "본 적이 없다.",
     )
 
     rep: MeshRep | None = None
-    if source == "샘플 폴더에서 선택":
-        samples = available_samples()
-        query = st.text_input(
-            "검색 (부분 문자열, 예: 0250)", key="search_sample",
-            help="입력한 글자를 이름 어디에든 포함하는 파일만 드롭다운에 남습니다.",
+    if source == SRC_TRAIN:
+        st.caption(
+            "모델이 **학습에 쓴** 메쉬입니다. 예측이 라벨과 잘 맞는 것은 당연하며, "
+            "이 화면의 값은 성능 근거가 되지 못합니다."
         )
-        filtered = [s for s in samples if query.lower() in s.lower()] if query else samples
-        if not filtered:
-            st.warning(f"'{query}' 를 포함하는 파일이 없습니다.")
-        else:
-            name = st.selectbox(f"모델 이름 ({len(filtered)}개)", filtered, index=0)
-            rep = parse_sample(name)
+        nm = pick_by_label(train_names, "search_train", "모델 이름")
+        if nm:
+            rep = parse_sample(nm)
 
-    elif source == "예측 사례 목록에서 선택 (FP/FN/경계선)":
+    elif source == SRC_TEST:
+        st.caption(
+            "애매하거나 분류가 어려워 **학습에서 제외한** 메쉬입니다. 모델이 한 번도 "
+            "본 적이 없으므로, 여기 결과는 정직한 평가에 해당합니다."
+        )
+        kind = st.radio(
+            "무엇을 볼지", ["둘 다", "애매만", "분류어려움만"],
+            horizontal=True, key="test_kind",
+            help="애매=사람이 정상/비정상 판정에 확신이 없었던 것. "
+                 "분류어려움=정상/비정상 자체를 정하지 못한 것.",
+        )
+        if kind == "애매만":
+            shown = [n for n in test_names if label_lookup().get(n, (0, 0))[0] != 2]
+        elif kind == "분류어려움만":
+            shown = [n for n in test_names if label_lookup().get(n, (0, 0))[0] == 2]
+        else:
+            shown = test_names
+
+        if st.checkbox("이 집합 전체의 모델-라벨 일치율 계산 (시간이 걸립니다)",
+                       value=False, key="test_stats"):
+            with st.spinner("계산 중..."):
+                amb_df = load_ambiguous_predictions(run_dir, device_str)
+            if not amb_df.empty:
+                sub = amb_df[amb_df["name"].isin(shown)]
+                known = sub[sub["agree"].notna()]
+                if len(known):
+                    st.caption(
+                        f"{len(sub)}개 중 원 라벨이 있는 {len(known)}개에서 "
+                        f"**모델-라벨 일치율 {known['agree'].mean():.1%}** "
+                        f"(참고용 - 사람도 판단이 어려웠던 사례라 '정답'이 불확실합니다)"
+                    )
+                else:
+                    st.caption(f"{len(sub)}개 전부 분류어려움이라 일치율을 낼 수 없습니다.")
+
+        if not shown:
+            st.info("해당하는 메쉬가 없습니다.")
+        else:
+            nm = pick_by_label(shown, "search_test", "모델 이름")
+            if nm:
+                rep = parse_sample(nm)
+
+    elif source == SRC_ERR:
         if has_full_model(run_dir):
             st.caption(
                 "이 목록의 확률은 같은 설정의 **5-fold 실행에서 나온 정직한 값**입니다. "
@@ -797,63 +886,7 @@ with st.sidebar:
                     sel_name = sub.iloc[labels_ui.index(pick)]["name"]
                     rep = parse_sample(sel_name)
 
-    elif source == "애매/분류어려움 목록에서 선택":
-        with st.spinner("계산 중..."):
-            amb_df = load_ambiguous_predictions(run_dir, device_str)
-        if amb_df.empty:
-            st.warning("학습에서 제외된(애매/분류어려움) 사례를 찾지 못했습니다.")
-        else:
-            view = st.radio(
-                "무엇을 볼지",
-                ["애매 (확실 아님, cls 0/1)", "분류 어려움 (cls=2)", "둘 다"],
-                help="애매=사람이 정상/비정상 판정에 확신이 없었던 것. "
-                    "분류 어려움=정상/비정상 자체를 정하지 못한 것.",
-            )
-            if view == "애매 (확실 아님, cls 0/1)":
-                sub = amb_df[(amb_df["ambig"] == 1) & (amb_df["cls"] != 2)]
-            elif view == "분류 어려움 (cls=2)":
-                sub = amb_df[amb_df["cls"] == 2]
-            else:
-                sub = amb_df
-
-            known = sub[sub["agree"].notna()]
-            if len(known):
-                acc = known["agree"].mean()
-                st.caption(
-                    f"현재 선택 {len(sub)}개 중 원 라벨이 있는 {len(known)}개에서 "
-                    f"**모델-라벨 일치율 {acc:.1%}**  "
-                    f"(참고용 — 사람도 판단이 어려웠던 사례라 '정답'이 불확실합니다)"
-                )
-            else:
-                st.caption(f"현재 선택 {len(sub)}개 (전부 분류 어려움이라 일치율 계산 불가)")
-
-            if sub.empty:
-                st.info("해당하는 사례가 없습니다.")
-            else:
-                cls_tag = {0: "정상", 1: "비정상", 2: "분류어려움"}
-                labels_ui = [
-                    f"{r.name}  (원 분류 {cls_tag[r.cls]}"
-                    f"{', 애매' if r.ambig else ''}, 모델예측 "
-                    f"{'비정상' if r.pred == 1 else '정상'} p={r.prob:.3f})"
-                    for r in sub.itertuples()
-                ]
-                query3 = st.text_input(
-                    "검색 (이름 부분 문자열, 예: 0250)", key="search_amb",
-                )
-                labels_ui_f = (
-                    [l for l in labels_ui if query3.lower() in l.lower()]
-                    if query3 else labels_ui
-                )
-                if not labels_ui_f:
-                    st.warning(f"'{query3}' 를 포함하는 사례가 없습니다.")
-                else:
-                    pick = st.selectbox(
-                        f"애매/분류어려움 사례 ({len(labels_ui_f)}개)", labels_ui_f, index=0
-                    )
-                    sel_name = sub.iloc[labels_ui.index(pick)]["name"]
-                    rep = parse_sample(sel_name)
-
-    elif source == "직접 업로드":
+    elif source == SRC_UPLOAD:
         bdf_file = st.file_uploader(".bdf 파일", type=["bdf"])
         json_file = st.file_uploader(".json 파일 (선택 — 없으면 전 절점 외부연결=False)",
                                      type=["json"])
