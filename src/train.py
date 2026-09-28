@@ -44,10 +44,10 @@ import paths
 from models import build_model, count_params
 
 #: baseline.py 로 실측한 tabular 기준선 (랜덤 5-fold, 집계 피처 37개 + HistGradientBoosting).
-#: SN2592_FWD_Clean 전체(3214개 학습대상) 기준. fold 평균과 out-of-fold 종합을 따로 둔다.
+#: SN2592_FWD_Clean 전체(3223개 학습대상, 라벨 0918) 기준. fold 평균과 out-of-fold 종합을 따로 둔다.
 BASELINE = {
-    "auc_fold": 0.9421, "acc_fold": 0.8653, "f1_fold": 0.8268,
-    "auc_oof": 0.9416, "acc_oof": 0.8653, "f1_oof": 0.8269,
+    "auc_fold": 0.9560, "acc_fold": 0.8895, "f1_fold": 0.8613,
+    "auc_oof": 0.9557, "acc_oof": 0.8895, "f1_oof": 0.8616,
 }
 
 

@@ -54,9 +54,19 @@ def build_feature_table(force: bool = False, verbose: bool = True) -> pd.DataFra
     if os.path.exists(CACHE_CSV) and not force:
         df = pd.read_csv(CACHE_CSV)
         if list(df.columns) == ["name", "cls", *GRAPH_FEATURE_NAMES]:
+            # 피처는 bdf/json 에서만 나오므로 재사용하되, 라벨(cls)과 대상 목록은
+            # 항상 엑셀에서 새로 읽는다. 예전에는 캐시의 옛 라벨을 그대로 써서,
+            # 라벨 엑셀을 갈아끼워도 기준선이 옛 정답으로 계산됐다.
+            cur = {s.name: s.cls for s in list_samples(verbose=False)}
+            df = df[df["name"].isin(cur)].copy()
+            df["cls"] = df["name"].map(cur).astype(int)
+            missing = set(cur) - set(df["name"])
+            if not missing:
+                if verbose:
+                    print(f"[baseline] 캐시 사용: {CACHE_CSV} ({len(df)}행, 라벨은 엑셀 기준)")
+                return df.reset_index(drop=True)
             if verbose:
-                print(f"[baseline] 캐시 사용: {CACHE_CSV} ({len(df)}행)")
-            return df
+                print(f"[baseline] 캐시에 없는 모델 {len(missing)}개 → 재계산")
         if verbose:
             print("[baseline] 캐시 컬럼이 바뀜 → 재계산")
 
