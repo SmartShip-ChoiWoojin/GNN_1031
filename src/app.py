@@ -124,19 +124,27 @@ def label_tag(name: str) -> str:
     return f"(애매·{LABEL_TAGS[cls]})" if ambig else f"({LABEL_TAGS[cls]})"
 
 
-def pick_by_label(names: list[str], key: str, title: str) -> str | None:
-    """이름 옆에 라벨을 붙여 고르게 하고 고른 이름을 돌려준다."""
+def pick_display(disp: list[str], names: list[str], key: str, title: str) -> str | None:
+    """보여줄 문구(disp)로 고르게 하고, 대응하는 이름(names)을 돌려준다.
+
+    목록마다 검색·선택을 따로 구현하면 화면마다 동작이 미묘하게 달라지므로 한 곳에 둔다.
+    """
     query = st.text_input(
         "검색 (부분 문자열, 예: 0250)", key=key,
-        help="입력한 글자를 이름 어디에든 포함하는 파일만 드롭다운에 남습니다.",
+        help="입력한 글자를 이름 어디에든 포함하는 항목만 드롭다운에 남습니다.",
     )
-    shown = [n for n in names if query.lower() in n.lower()] if query else names
-    if not shown:
-        st.warning(f"'{query}' 를 포함하는 파일이 없습니다.")
+    pairs = [(d, n) for d, n in zip(disp, names)
+             if not query or query.lower() in d.lower()]
+    if not pairs:
+        st.warning(f"'{query}' 를 포함하는 항목이 없습니다.")
         return None
-    disp = [f"{n}  {label_tag(n)}" for n in shown]
-    pick = st.selectbox(f"{title} ({len(shown)}개)", disp, index=0)
-    return shown[disp.index(pick)]
+    pick = st.selectbox(f"{title} ({len(pairs)}개)", [d for d, _ in pairs], index=0)
+    return dict(pairs)[pick]
+
+
+def pick_by_label(names: list[str], key: str, title: str) -> str | None:
+    """이름 옆에 라벨을 붙여 고르게 하고 고른 이름을 돌려준다."""
+    return pick_display([f"{n}  {label_tag(n)}" for n in names], names, key, title)
 
 
 @st.cache_data
@@ -756,7 +764,7 @@ with st.sidebar:
     train_names, test_names = split_samples()
     SRC_TRAIN = f"학습 데이터 train ({len(train_names)}개)"
     SRC_TEST = f"테스트 데이터 test ({len(test_names)}개)"
-    SRC_ERR = "예측 사례 목록에서 선택 (FP/FN/경계선)"
+    SRC_ERR = "오분류·경계선 사례 (train 기준 FP/FN)"
     SRC_UPLOAD = "직접 업로드"
 
     source = st.radio(
@@ -818,6 +826,10 @@ with st.sidebar:
                 rep = parse_sample(nm)
 
     elif source == SRC_ERR:
+        st.caption(
+            "**학습 데이터(train) 안에서** 모델이 틀렸거나 아슬아슬하게 맞힌 사례입니다. "
+            "test(애매/분류어려움)에는 정직한 확률이 없어 여기 나오지 않습니다."
+        )
         if has_full_model(run_dir):
             st.caption(
                 "이 목록의 확률은 같은 설정의 **5-fold 실행에서 나온 정직한 값**입니다. "
@@ -865,26 +877,14 @@ with st.sidebar:
             if sub.empty:
                 st.info("해당하는 사례가 없습니다.")
             else:
-                labels_ui = [
-                    f"[{r.kind}] {r.name}  (실제 {'비정상' if r.y == 1 else '정상'}, "
-                    f"예측확률 {r.prob:.3f})"
+                sel_names = list(sub["name"])
+                disp = [
+                    f"[{r.kind}] {r.name}  {label_tag(r.name)}  정직한 확률 {r.prob:.3f}"
                     for r in sub.itertuples()
                 ]
-                query2 = st.text_input(
-                    "검색 (이름 부분 문자열, 예: 0250)", key="search_err",
-                )
-                labels_ui_f = (
-                    [l for l in labels_ui if query2.lower() in l.lower()]
-                    if query2 else labels_ui
-                )
-                if not labels_ui_f:
-                    st.warning(f"'{query2}' 를 포함하는 사례가 없습니다.")
-                else:
-                    pick = st.selectbox(
-                        f"예측 사례 ({len(labels_ui_f)}개)", labels_ui_f, index=0
-                    )
-                    sel_name = sub.iloc[labels_ui.index(pick)]["name"]
-                    rep = parse_sample(sel_name)
+                nm = pick_display(disp, sel_names, "search_err", "사례")
+                if nm:
+                    rep = parse_sample(nm)
 
     elif source == SRC_UPLOAD:
         bdf_file = st.file_uploader(".bdf 파일", type=["bdf"])
