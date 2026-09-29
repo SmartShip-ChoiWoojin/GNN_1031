@@ -6,7 +6,7 @@
   - 샘플 폴더에서 모델 선택, 예측 사례(FP/FN/경계선 근처 정답) 목록에서 선택,
     애매/분류어려움(학습 제외) 목록에서 선택, 또는 .bdf(+.json) 직접 업로드
   - 사이드바에 현재 선택한 실행의 5-fold 성능(AUC/ACC/F1)을 상시 표시
-  - 오분류 목록은 train.py 가 저장한 out-of-fold 예측(oof.csv)을 그대로 써서
+  - 오분류 목록은 predict_all.py 가 배포 모델로 미리 계산해 둔 predictions.csv 를 써서
     재추론 없이 즉시 FP/FN 을 걸러내고, 확신도(0.5 에서 먼 정도) 순으로 정렬한다
   - Plotly 3D — 마우스로 자유롭게 회전·확대·이동, 요소에 마우스 올리면 상세정보
   - 초기 화면은 채색 없이 메쉬 형상만 명확히 표시. "중요도 강조"를 켜면
@@ -14,8 +14,9 @@
   - 학습된 GNN(runs/*)으로 정상/비정상 확률 + 요소별 어텐션(문제 요소 지목)
   - "그래프 구조" 탭 — 메쉬가 GNN 입력 그래프로 어떻게 변환됐는지
     (요소기반이면 요소 중심점=노드, 관계 종류별 색의 엣지) 시각화
-  - 학습셋에 있는 이름이면 그 요소를 본 적 없는 fold 모델로 정직하게 예측,
-    없는 이름(직접 업로드)이면 5-fold 앙상블 평균으로 예측
+  - 배포 모델(full.pt) 하나로 모든 메쉬를 예측한다. 예전처럼 파일 이름에 따라
+    다른 모델을 고르지 않으므로 어느 PC 에서 열어도 같은 결과가 나온다
+    (full.pt 가 없는 옛 5-fold 실행을 고르면 예전 방식으로 동작한다)
 """
 
 from __future__ import annotations
@@ -227,94 +228,38 @@ def parse_sample(name: str) -> MeshRep:
 
 
 @st.cache_data(show_spinner=False)
-def load_oof_errors(run_dir: str) -> pd.DataFrame:
-    """train.py 가 저장해둔 out-of-fold 예측(oof.csv/oof_names.txt) 전체를 읽어
-    이름을 붙인다 — 각 행이 FP / FN / 정답 중 하나로 분류된다.
+def load_predictions(run_dir: str) -> pd.DataFrame:
+    """배포 모델이 라벨 있는 전 메쉬를 예측해 둔 표(predict_all.py 가 만든다).
 
-    재추론 없이 그대로 쓴다 — 각 샘플이 자기를 학습에 안 쓴 fold 로 이미 정직하게
-    평가된 결과이므로, "왜 틀렸는지"·"얼마나 아슬아슬하게 맞았는지" 훑어볼 목록으로
-    그대로 신뢰할 수 있다. 호출부에서 kind/conf 로 원하는 부분집합을 걸러 쓴다.
+    화면 어디서나 같은 모델, 같은 확률을 쓴다. 예전에는 오분류 목록만 5-fold 의
+    값을 썼는데, 그러면 한 메쉬에 점수가 두 개 생겨서 목록과 화면이 서로 다른
+    판정을 내놓는 문제가 있었다.
     """
-    oof_path = os.path.join(run_dir, "oof.csv")
-    names_path = os.path.join(run_dir, "oof_names.txt")
-    if not (os.path.isfile(oof_path) and os.path.isfile(names_path)):
-        return pd.DataFrame(columns=["name", "y", "prob", "kind", "conf"])
-
-    arr = np.loadtxt(oof_path, delimiter=",", skiprows=1)
-    with open(names_path, "r", encoding="utf-8") as fh:
-        names = fh.read().splitlines()
-
-    y = arr[:, 1].astype(int)
-    prob = arr[:, 2]
-    pred = (prob > 0.5).astype(int)
-
-    df = pd.DataFrame({"name": names, "y": y, "prob": prob})
+    path = os.path.join(run_dir, "predictions.csv")
+    if not os.path.isfile(path):
+        return pd.DataFrame(
+            columns=["name", "cls", "ambig", "trainable", "prob", "pred", "kind", "conf"]
+        )
+    df = pd.read_csv(path)
+    df["pred"] = (df["prob"] > 0.5).astype(int)
     df["kind"] = np.select(
-        [(y == 0) & (pred == 1), (y == 1) & (pred == 0)],
-        ["FP", "FN"], default="정답",
+        [(df["cls"] == 0) & (df["pred"] == 1), (df["cls"] == 1) & (df["pred"] == 0),
+         df["cls"] == 2],
+        ["FP", "FN", "분류어려움"], default="정답",
     )
-    # 틀린 정도(0.5 에서 얼마나 확신에 차서 틀렸는지) — 큰 순으로 보면
-    # "모델이 왜 이렇게 확신했는데 틀렸지?"를 먼저 보게 된다.
-    df["conf"] = np.abs(df["prob"] - 0.5)
+    df["conf"] = (df["prob"] - 0.5).abs()
     return df
-
-
-@st.cache_data(show_spinner=False)
-def oof_lookup(run_dir: str) -> dict:
-    """{이름: (정답, 정직한 확률, FP/FN/정답)} - 화면에서 바로 대조하기 위한 조회표."""
-    df = load_oof_errors(run_dir)
-    return {r.name: (int(r.y), float(r.prob), r.kind) for r in df.itertuples()}
-
-
-@st.cache_data(show_spinner="애매/분류어려움 사례 예측 계산 중 (최초 1회, 다소 걸릴 수 있음)...")
-def load_ambiguous_predictions(run_dir: str, device_str: str) -> pd.DataFrame:
-    """학습에서 제외한 애매(ambig=1)/분류어려움(cls=2) 사례에 5-fold 앙상블을 돌린다.
-
-    train.py 의 oof.csv 는 학습 대상(확실 & cls<2)에만 있어서 이 사례들은 없다.
-    여기서는 직접 그래프를 만들어 5개 fold 모델 평균으로 예측한다 — 결과가 run_dir,
-    device_str 조합으로 캐시되므로 같은 세션에서는 한 번만 계산한다.
-    """
-    args, names, labels, arrays, fold_of, opts = get_run_context(run_dir)
-    trainset = set(names)
-    device = torch.device(device_str)
-
-    table = load_label_table(paths.LABEL_XLSX)
-    non_train = table[~table["trainable"]]
-    paired, _, _ = discover_pairs(paths.FE_DIR)
-
-    rows = []
-    for r in non_train.itertuples():
-        if r.name not in paired or r.name in trainset:
-            continue
-        bdf, js = paired[r.name]
-        rep = MeshRep(load_raw_mesh(bdf, js))
-        ga = graphs.build(rep, args.graph, **opts)
-
-        if has_full_model(run_dir):
-            model, norm, _, platt = get_full_model(run_dir, device_str)
-            logit, _ = attention_for(ga, r.name, 0, model, norm, device)
-            prob = float(1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1]))))
-        else:
-            probs = []
-            for f in range(1, args.folds + 1):
-                model, norm, _, platt = get_fold_model(run_dir, f, device_str)
-                logit, _ = attention_for(ga, r.name, 0, model, norm, device)
-                probs.append(1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1]))))
-            prob = float(np.mean(probs))
-        pred = int(prob > 0.5)
-        rows.append(dict(
-            name=r.name, cls=int(r.cls), ambig=int(r.ambig), prob=prob, pred=pred,
-            agree=(pred == r.cls) if r.cls in (0, 1) else None,
-        ))
-    return pd.DataFrame(rows)
 
 
 # ──────────────────────────────────────────────────────────────────────────
 # 예측
 # ──────────────────────────────────────────────────────────────────────────
 def predict(rep: MeshRep, run_dir: str, device_str: str) -> dict:
-    """예측 확률 + 요소별 중요도. 학습셋에 있는 이름이면 그 fold 모델(정직한 평가),
-    없으면 5-fold 앙상블 평균을 쓴다."""
+    """예측 확률 + 요소별 중요도.
+
+    배포 모델(full.pt)이 있으면 어떤 파일이든 그 모델 하나로만 예측한다 - 파일 이름이나
+    학습셋 포함 여부에 따라 계산이 달라지지 않으므로 어느 PC 에서 열어도 같은 값이 나온다.
+    """
     args, names, labels, arrays, fold_of, opts = get_run_context(run_dir)
     device = torch.device(device_str)
 
@@ -751,7 +696,7 @@ with st.sidebar:
         st.caption(
             f"**전체 학습 단일 모델** (학습대상 {run_metrics['n_samples']}개). "
             f"fold 분할이 없어 어느 PC에서 열어도 같은 결과가 나옵니다. "
-            f"성능 수치는 같은 설정의 5-fold 실행에서 측정합니다."
+            f"화면의 모든 확률은 이 모델 하나에서 나옵니다."
         )
     elif run_metrics and run_metrics["fold_mean"]:
         fm = run_metrics["fold_mean"]
@@ -771,7 +716,7 @@ with st.sidebar:
     train_names, test_names = split_samples()
     SRC_TRAIN = f"학습 데이터 train ({len(train_names)}개)"
     SRC_TEST = f"테스트 데이터 test ({len(test_names)}개)"
-    SRC_ERR = "오분류·경계선 사례 (train 기준 FP/FN)"
+    SRC_ERR = "오분류·경계선 사례 (FP/FN)"
     SRC_UPLOAD = "직접 업로드"
 
     source = st.radio(
@@ -793,8 +738,8 @@ with st.sidebar:
 
     elif source == SRC_TEST:
         st.caption(
-            "애매하거나 분류가 어려워 **학습에서 제외한** 메쉬입니다. 모델이 한 번도 "
-            "본 적이 없으므로, 여기 결과는 정직한 평가에 해당합니다."
+            "애매하거나 분류가 어려워 **학습에서 제외한** 메쉬입니다. "
+            "모델이 한 번도 본 적이 없는 메쉬들입니다."
         )
         kind = st.radio(
             "무엇을 볼지", ["둘 다", "애매만", "분류어려움만"],
@@ -809,21 +754,18 @@ with st.sidebar:
         else:
             shown = test_names
 
-        if st.checkbox("이 집합 전체의 모델-라벨 일치율 계산 (시간이 걸립니다)",
-                       value=False, key="test_stats"):
-            with st.spinner("계산 중..."):
-                amb_df = load_ambiguous_predictions(run_dir, device_str)
-            if not amb_df.empty:
-                sub = amb_df[amb_df["name"].isin(shown)]
-                known = sub[sub["agree"].notna()]
-                if len(known):
-                    st.caption(
-                        f"{len(sub)}개 중 원 라벨이 있는 {len(known)}개에서 "
-                        f"**모델-라벨 일치율 {known['agree'].mean():.1%}** "
-                        f"(참고용 - 사람도 판단이 어려웠던 사례라 '정답'이 불확실합니다)"
-                    )
-                else:
-                    st.caption(f"{len(sub)}개 전부 분류어려움이라 일치율을 낼 수 없습니다.")
+        stat_df = load_predictions(run_dir)
+        if not stat_df.empty:
+            known = stat_df[stat_df["name"].isin(shown) & (stat_df["cls"] <= 1)]
+            if len(known):
+                acc = float((known["pred"] == known["cls"]).mean())
+                st.caption(
+                    f"이 집합에서 라벨이 정상/비정상인 {len(known)}개 기준 "
+                    f"**모델-라벨 일치율 {acc:.1%}** "
+                    f"(참고용 - 사람도 판단이 어려웠던 사례라 '정답'이 불확실합니다)"
+                )
+            else:
+                st.caption("전부 분류어려움이라 일치율을 낼 수 없습니다.")
 
         if not shown:
             st.info("해당하는 메쉬가 없습니다.")
@@ -833,63 +775,65 @@ with st.sidebar:
                 rep = parse_sample(nm)
 
     elif source == SRC_ERR:
-        st.caption(
-            "**학습 데이터(train) 안에서** 모델이 틀렸거나 아슬아슬하게 맞힌 사례입니다. "
-            "test(애매/분류어려움)에는 정직한 확률이 없어 여기 나오지 않습니다."
-        )
-        if has_full_model(run_dir):
-            st.caption(
-                "이 목록의 확률은 같은 설정의 **5-fold 실행에서 나온 정직한 값**입니다. "
-                "배포 모델은 이 메쉬들을 학습에 썼기 때문에 자기 점수로는 자기 오답을 "
-                "찾을 수 없어, 오분류 탐색에는 이 값을 씁니다. 메쉬를 고르면 화면의 "
-                "예측값은 배포 모델이 다시 계산한 값(학습에 쓴 메쉬라 낙관적)입니다."
-            )
-        err_df = load_oof_errors(run_dir)
-        if err_df.empty:
+        pred_df = load_predictions(run_dir)
+        if pred_df.empty:
             st.warning(
-                "이 실행에는 oof.csv 가 없습니다. 오분류 목록은 5-fold 실행에서만 "
-                "볼 수 있습니다 (왼쪽 '모델 실행'에서 5-fold 실행을 선택하세요)."
+                "이 실행에는 predictions.csv 가 없습니다. "
+                "`python src/predict_all.py --run <실행폴더>` 로 만들 수 있습니다."
             )
         else:
+            scope = st.radio(
+                "어느 집합에서", ["train", "test", "둘 다"], horizontal=True, key="err_scope",
+                help="train=모델이 학습에 쓴 메쉬. test=애매/분류어려움이라 학습에서 뺀 메쉬.",
+            )
+            if scope == "train":
+                pool = pred_df[pred_df["trainable"] == 1]
+            elif scope == "test":
+                pool = pred_df[pred_df["trainable"] == 0]
+            else:
+                pool = pred_df
+            pool = pool[pool["cls"] <= 1]   # 분류어려움은 정답이 없어 오분류를 따질 수 없다
+
             kind = st.radio(
                 "무엇을 볼지",
                 ["FP (정상을 비정상으로 오판)", "FN (비정상을 정상으로 오판)", "둘 다",
                  "경계선 근처 정답 (확신도 낮게 맞춘 사례)"],
-                help="FP=실제 정상인데 모델이 비정상이라 한 것. FN=실제 비정상인데 정상이라 한 것. "
-                    "경계선 근처 정답=답은 맞혔지만 0.5 에 아슬아슬하게 가까운 확률로 맞춘 사례.",
+                help="FP=실제 정상인데 모델이 비정상이라 한 것. FN=실제 비정상인데 정상이라 "
+                     "한 것. 경계선 근처 정답=답은 맞혔지만 0.5 에 아슬아슬하게 가까운 확률로 "
+                     "맞춘 사례.",
             )
 
             if kind == "경계선 근처 정답 (확신도 낮게 맞춘 사례)":
                 max_conf = st.slider(
                     "확신도 상한 (0.5 에서 얼마나 떨어졌는지)", 0.0, 0.5, 0.15, 0.01,
-                    help="0 에 가까울수록 아슬아슬하게(50%에 가깝게) 맞춘 사례. "
-                        "예: 0.15 → 확률 0.35~0.65 사이로 맞춘 것만.",
+                    help="0 에 가까울수록 아슬아슬하게 맞춘 사례. "
+                         "예: 0.15 → 확률 0.35~0.65 사이로 맞춘 것만.",
                 )
-                sub = err_df[
-                    (err_df["kind"] == "정답") & (err_df["conf"] <= max_conf)
-                ].sort_values("conf")
-                n_correct = int((err_df["kind"] == "정답").sum())
-                st.caption(f"정답 {n_correct}개 중 확신도 {max_conf:.2f} 이하로 맞춘 사례 "
-                          f"{len(sub)}개 (0.5 에 가장 가까운 순 — 가장 아슬아슬한 것부터)")
+                sub = pool[(pool["kind"] == "정답") & (pool["conf"] <= max_conf)]
+                sub = sub.sort_values("conf")
+                st.caption(
+                    f"{scope} 정답 {int((pool['kind'] == '정답').sum())}개 중 확신도 "
+                    f"{max_conf:.2f} 이하 {len(sub)}개 (가장 아슬아슬한 것부터)"
+                )
             else:
                 want = {"FP (정상을 비정상으로 오판)": ["FP"],
-                       "FN (비정상을 정상으로 오판)": ["FN"],
-                       "둘 다": ["FP", "FN"]}[kind]
-                sub = err_df[err_df["kind"].isin(want)].sort_values("conf", ascending=False)
-                n_fp = int((err_df["kind"] == "FP").sum())
-                n_fn = int((err_df["kind"] == "FN").sum())
-                st.caption(f"전체 {len(err_df)}개 중 FP {n_fp}개 / FN {n_fn}개 "
-                          f"(현재 선택 {len(sub)}개, 확신도 높은 오분류부터 정렬)")
+                        "FN (비정상을 정상으로 오판)": ["FN"],
+                        "둘 다": ["FP", "FN"]}[kind]
+                sub = pool[pool["kind"].isin(want)].sort_values("conf", ascending=False)
+                n_fp = int((pool["kind"] == "FP").sum())
+                n_fn = int((pool["kind"] == "FN").sum())
+                acc = float((pool["pred"] == pool["cls"]).mean())
+                st.caption(
+                    f"{scope} {len(pool)}개 중 FP {n_fp}개 / FN {n_fn}개 "
+                    f"(일치율 {acc:.1%}, 현재 선택 {len(sub)}개 · 확신 있게 틀린 것부터)"
+                )
 
             if sub.empty:
                 st.info("해당하는 사례가 없습니다.")
             else:
-                sel_names = list(sub["name"])
-                disp = [
-                    f"[{r.kind}] {r.name}  {label_tag(r.name)}  정직한 확률 {r.prob:.3f}"
-                    for r in sub.itertuples()
-                ]
-                nm = pick_display(disp, sel_names, "search_err", "사례")
+                disp = [f"[{r.kind}] {r.name}  {label_tag(r.name)}  p={r.prob:.3f}"
+                        for r in sub.itertuples()]
+                nm = pick_display(disp, list(sub["name"]), "search_err", "사례")
                 if nm:
                     rep = parse_sample(nm)
 
@@ -947,24 +891,6 @@ else:
     else:
         col2.metric("실제 라벨", "정보 없음")
 col3.metric("요소 수", f"{len(rep.shells)}쉘 + {len(rep.lines)}개 1D")
-
-# 배포 모델은 이 메쉬를 학습에 썼으므로, 같은 메쉬에 대한 "정직한 평가"(그 메쉬를
-# 학습에 쓰지 않은 5-fold 모델의 값)를 나란히 보여준다. 한쪽만 보이면 오분류
-# 목록과 화면이 서로 모순돼 보인다 - 목록은 FP 라는데 화면은 "일치"라고 하는 식.
-_oof = oof_lookup(run_dir).get(rep.name)
-if _oof is not None:
-    _y, _p, _kind = _oof
-    _msg = (f"**정직한 평가(이 메쉬를 학습에 쓰지 않은 5-fold 모델)**: "
-            f"{'비정상' if _p > 0.5 else '정상'} `p={_p:.4f}` → **{_kind}**")
-    if (_p > 0.5) == (result["prob"] > 0.5):
-        st.caption(_msg + "  · 위 배포 모델 예측과 같은 판정입니다.")
-    else:
-        st.warning(
-            _msg + "\n\n"
-            "위 예측은 **배포 모델**이 낸 값인데 판정이 서로 다릅니다. 배포 모델은 "
-            "이 메쉬를 학습에 써서 정답을 이미 봤기 때문입니다. "
-            "**모델 성능을 볼 때는 이 '정직한 평가' 쪽을 보셔야 합니다.**"
-        )
 
 with st.expander("예측 상세 (정확한 확률·확신도)", expanded=False):
     p = result["prob"]
