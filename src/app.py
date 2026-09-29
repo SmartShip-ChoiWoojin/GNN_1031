@@ -259,6 +259,13 @@ def load_oof_errors(run_dir: str) -> pd.DataFrame:
     return df
 
 
+@st.cache_data(show_spinner=False)
+def oof_lookup(run_dir: str) -> dict:
+    """{이름: (정답, 정직한 확률, FP/FN/정답)} - 화면에서 바로 대조하기 위한 조회표."""
+    df = load_oof_errors(run_dir)
+    return {r.name: (int(r.y), float(r.prob), r.kind) for r in df.itertuples()}
+
+
 @st.cache_data(show_spinner="애매/분류어려움 사례 예측 계산 중 (최초 1회, 다소 걸릴 수 있음)...")
 def load_ambiguous_predictions(run_dir: str, device_str: str) -> pd.DataFrame:
     """학습에서 제외한 애매(ambig=1)/분류어려움(cls=2) 사례에 5-fold 앙상블을 돌린다.
@@ -940,6 +947,24 @@ else:
     else:
         col2.metric("실제 라벨", "정보 없음")
 col3.metric("요소 수", f"{len(rep.shells)}쉘 + {len(rep.lines)}개 1D")
+
+# 배포 모델은 이 메쉬를 학습에 썼으므로, 같은 메쉬에 대한 "정직한 평가"(그 메쉬를
+# 학습에 쓰지 않은 5-fold 모델의 값)를 나란히 보여준다. 한쪽만 보이면 오분류
+# 목록과 화면이 서로 모순돼 보인다 - 목록은 FP 라는데 화면은 "일치"라고 하는 식.
+_oof = oof_lookup(run_dir).get(rep.name)
+if _oof is not None:
+    _y, _p, _kind = _oof
+    _msg = (f"**정직한 평가(이 메쉬를 학습에 쓰지 않은 5-fold 모델)**: "
+            f"{'비정상' if _p > 0.5 else '정상'} `p={_p:.4f}` → **{_kind}**")
+    if (_p > 0.5) == (result["prob"] > 0.5):
+        st.caption(_msg + "  · 위 배포 모델 예측과 같은 판정입니다.")
+    else:
+        st.warning(
+            _msg + "\n\n"
+            "위 예측은 **배포 모델**이 낸 값인데 판정이 서로 다릅니다. 배포 모델은 "
+            "이 메쉬를 학습에 써서 정답을 이미 봤기 때문입니다. "
+            "**모델 성능을 볼 때는 이 '정직한 평가' 쪽을 보셔야 합니다.**"
+        )
 
 with st.expander("예측 상세 (정확한 확률·확신도)", expanded=False):
     p = result["prob"]
