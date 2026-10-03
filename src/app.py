@@ -1022,12 +1022,20 @@ with st.sidebar:
 
         stat_df = load_predictions(run_dir)
         if not stat_df.empty:
-            known = stat_df[stat_df["name"].isin(shown) & (stat_df["cls"] <= 1)]
+            sub_df = stat_df[stat_df["name"].isin(shown)]
+            known = sub_df[sub_df["cls"] <= 1]
             if len(known):
                 acc = float((known["pred"] == known["cls"]).mean())
                 st.caption(
                     f"라벨이 정상/비정상인 {len(known)}개 기준 **일치율 {acc:.1%}** "
                     f"(참고용 - '정답'이 불확실한 집합입니다)"
+                )
+            elif sub_df.empty:
+                # 교차검증 실행의 예측표(oof)는 학습대상만 담는다. 학습에서 제외된
+                # 메쉬에는 저장된 예측이 없다 - 아래에서 고르면 그때 계산한다.
+                st.caption(
+                    "이 실행에는 이 묶음의 저장된 예측이 없습니다(교차검증은 학습대상만 "
+                    "채점합니다). 메쉬를 고르면 그 자리에서 계산합니다."
                 )
             else:
                 st.caption("전부 분류어려움이라 일치율을 낼 수 없습니다.")
@@ -1047,14 +1055,26 @@ with st.sidebar:
                 "`python scripts/train_deploy.py` 를 다시 돌리면 만들어집니다."
             )
         else:
-            _hold = set(hold_names)
-            opts = ["학습에 쓴 메쉬"] + (["홀드아웃"] if _hold else []) + ["애매·분류어려움", "전체"]
-            scope = st.radio(
-                "어느 집합에서", opts, horizontal=True, key="err_scope",
-                help="홀드아웃=학습에서 빼둔 몫이라 여기 오분류가 실제 실력에 가깝다. "
-                     "학습에 쓴 메쉬의 오분류는 '외우고도 틀린 것'이라 성격이 다르다.",
-            )
-            if scope == "학습에 쓴 메쉬":
+            # 선택지는 예측표에 실제로 들어 있는 묶음만 올린다. 교차검증 실행의
+            # 예측표(oof)는 학습대상만 담으므로 홀드아웃도 애매도 없다.
+            _hold = set(hold_names) & set(pred_df["name"])
+            _has_amb = bool((pred_df["trainable"] == 0).any())
+            FIT_LBL = "교차검증 평가" if is_cv_run else "학습에 쓴 메쉬"
+            opts = [FIT_LBL]
+            if _hold:
+                opts.append("홀드아웃")
+            if _has_amb:
+                opts.append("애매·분류어려움")
+            if len(opts) > 1:
+                opts.append("전체")
+
+            scope = (st.radio("어느 집합에서", opts, horizontal=True, key="err_scope",
+                              help="홀드아웃=학습에서 빼둔 몫이라 여기 오분류가 실제 실력에 "
+                                   "가깝다. 학습에 쓴 메쉬의 오분류는 '외우고도 틀린 것'이라 "
+                                   "성격이 다르다.")
+                     if len(opts) > 1 else opts[0])
+
+            if scope == FIT_LBL:
                 pool = pred_df[(pred_df["trainable"] == 1) & (~pred_df["name"].isin(_hold))]
             elif scope == "홀드아웃":
                 pool = pred_df[pred_df["name"].isin(_hold)]
