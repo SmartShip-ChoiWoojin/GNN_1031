@@ -317,6 +317,7 @@ def load_run_metrics(run_dir: str) -> dict | None:
         "n_fit": res.get("n_fit"),
         "n_holdout": res.get("n_holdout") or 0,
         "metrics": res.get("metrics") or {},
+        "val_frac": float((res.get("args") or {}).get("val_frac") or 0),
         "label_xlsx": res.get("label_xlsx"),
     }
 
@@ -962,10 +963,20 @@ with st.sidebar:
                 acc = float((stat_df["pred"] == stat_df["cls"]).mean())
                 st.caption(f"{len(stat_df)}개 기준 **일치율 {acc:.1%}**")
         else:
-            st.caption(
-                "모델이 **학습에 쓴** 메쉬입니다. 예측이 라벨과 잘 맞는 것은 당연하며, "
-                "이 화면의 값은 성능 근거가 되지 못합니다."
-            )
+            msg = ("모델이 **학습에 쓴** 메쉬입니다. 예측이 라벨과 잘 맞는 것은 당연하며, "
+                   "이 화면의 값은 성능 근거가 되지 못합니다.")
+            # 보정용 실행은 이 몫 안에서 또 일부를 조기종료 판단에만 쓴다. 합친 수만
+            # 보여주면 실제 학습량이 과장된다.
+            _m = (run_metrics or {}).get("metrics", {})
+            _nw, _nv = _m.get("n_weights"), _m.get("n_val")
+            _vf = (run_metrics or {}).get("val_frac", 0)
+            if _nw and _nv:
+                msg += (f"  이 중 실제로 가중치를 학습한 것은 **{_nw}개**이고, "
+                        f"**{_nv}개**는 조기종료 판단에만 쓰였습니다.")
+            elif _vf > 0:
+                msg += (f"  이 중 약 **{_vf:.0%}** 는 조기종료 판단에만 쓰여, "
+                        f"가중치 학습에는 들어가지 않았습니다.")
+            st.caption(msg)
         nm = pick_by_label(fit_names, "search_fit", "모델 이름", LBL)
         if nm:
             rep = parse_sample(nm)

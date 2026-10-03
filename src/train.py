@@ -225,6 +225,10 @@ def train_one_fold(
     m["platt_a"], m["platt_b"] = a, b
     m["train_auc"] = m_train["auc"]
     m["train_acc"] = m_train["acc"]
+    # 학습 몫 안에서 실제로 가중치를 업데이트한 수와 조기종료 판단에만 쓴 수.
+    # 화면에서 "학습에 쓴 메쉬"가 둘을 합친 수로 보이면 과장이 된다.
+    m["n_weights"] = int(len(inner_tr))
+    m["n_val"] = int(len(inner_val))
 
     ckpt = {
         "model_state": best_state,
@@ -262,6 +266,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--label-xlsx", default=None,
                     help="라벨 엑셀을 바꿔서 돌린다 (기본: paths.LABEL_XLSX). "
                          "옛 라벨로 같은 평가를 재현해 비교할 때 쓴다.")
+    ap.add_argument("--holdout-from", default=None,
+                    help="평가 전용 명단을 파일에서 읽는다(한 줄에 하나). 라벨 버전이 달라도 "
+                         "같은 메쉬로 채점해 비교하려 할 때 쓴다. --holdout 보다 우선한다.")
     ap.add_argument("--holdout", type=float, default=0.0,
                     help="--full 일 때 이 비율을 떼어 평가 전용으로 쓴다 (기본 0=전부 학습). "
                          "0.1 이면 90%% 로 학습하고 10%% 로 정직하게 채점한다. 떼어낸 몫은 "
@@ -353,7 +360,17 @@ def main(argv: list[str] | None = None) -> int:
         # 실행 시점에 다시 계산할 필요가 없다 -- 그 계산이 PC 마다 어긋나면서
         # 같은 메쉬에 다른 판정이 나오던 문제가 구조적으로 사라진다.
         all_idx = np.arange(len(y))
-        if args.holdout > 0:
+        if args.holdout_from:
+            # 명단을 그대로 쓴다. 학습대상에 없는 이름(라벨 버전이 달라 빠진 것)은 건너뛴다.
+            with open(args.holdout_from, "r", encoding="utf-8") as fh:
+                want = set(fh.read().splitlines())
+            hold_idx = np.array([i for i, n in enumerate(names) if n in want])
+            keep = np.ones(len(names), dtype=bool)
+            keep[hold_idx] = False
+            fit_idx = all_idx[keep]
+            print(f"   평가 명단을 파일에서 읽음: {os.path.basename(args.holdout_from)} "
+                  f"({len(want)}개 중 이 라벨의 학습대상에 있는 {len(hold_idx)}개 사용)")
+        elif args.holdout > 0:
             # 평가 전용 몫을 먼저 떼어낸다. 층화 분할이라 정상/비정상 비율이 유지된다.
             fit_idx, hold_idx = train_test_split(
                 all_idx, test_size=args.holdout, random_state=args.seed, stratify=y
@@ -363,7 +380,7 @@ def main(argv: list[str] | None = None) -> int:
 
         print("")
         print(f"-- 전체 학습 (fold 분할 없음): 학습대상 {len(all_idx)}개")
-        if args.holdout > 0:
+        if args.holdout > 0 or args.holdout_from:
             print(f"   학습 {len(fit_idx)}개 / 평가 전용 {len(hold_idx)}개 "
                   f"({args.holdout:.0%}) - 평가 몫은 학습에도 조기종료에도 쓰지 않는다")
         if float(args.val_frac) > 0:
@@ -393,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  내부 val AUC : {m['best_val_auc']:.4f}  (@ epoch {m['best_epoch']})")
         else:
             print(f"  검증셋 없음   : {args.epochs} epoch 고정 학습, 학습에 쓴 {len(fit_idx)}개")
-        if args.holdout > 0:
+        if args.holdout > 0 or args.holdout_from:
             print(f"  홀드아웃 평가 : AUC {m['auc']:.4f}  ACC {m['acc']:.4f}  F1 {m['f1']:.4f}"
                   f"   <- 보고할 성능 ({len(hold_idx)}개, 학습에 쓰지 않음)")
             print(f"  학습분 재현   : AUC {m['train_auc']:.4f}  ACC {m['train_acc']:.4f}"
@@ -410,14 +427,14 @@ def main(argv: list[str] | None = None) -> int:
             "metrics": m,
             "n_samples": int(len(y)),
             "n_fit": int(len(fit_idx)),
-            "n_holdout": int(len(hold_idx)) if args.holdout > 0 else 0,
+            "n_holdout": int(len(hold_idx)) if (args.holdout > 0 or args.holdout_from) else 0,
             "label_xlsx": os.path.basename(paths.LABEL_XLSX),
         }
         with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as fh:
             json.dump(result, fh, ensure_ascii=False, indent=2)
         with open(os.path.join(run_dir, "train_names.txt"), "w", encoding="utf-8") as fh:
             fh.write("\n".join(names[i] for i in fit_idx))
-        if args.holdout > 0:
+        if args.holdout > 0 or args.holdout_from:
             # 어느 메쉬가 평가 전용이었는지 남긴다. 화면에서 구분하려면 필요하다.
             with open(os.path.join(run_dir, "holdout_names.txt"), "w", encoding="utf-8") as fh:
                 fh.write("\n".join(names[i] for i in hold_idx))
