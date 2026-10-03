@@ -62,6 +62,9 @@ setting_fasoo()
 
 st.set_page_config(page_title="메쉬 정상/비정상 뷰어", layout="wide")
 
+#: 실행마다 라벨 엑셀을 갈아끼우므로, 원래 기본값을 따로 기억해 둔다.
+paths_label_default = paths.LABEL_XLSX
+
 # ── 색상 상수 ────────────────────────────────────────────────────────────
 NEUTRAL_SHELL = "#c7ced9"     # 강조 안 된 쉘 — 중립 회색, 형상이 잘 보이도록
 NEUTRAL_LINE = "#1d4ed8"      # 강조 안 된 1D 요소 — 쉘과 구분되는 진한 파랑
@@ -174,8 +177,8 @@ def validation_table() -> pd.DataFrame:
 
 
 @st.cache_data
-def label_lookup() -> dict[str, tuple[int, int]]:
-    df = load_label_table(paths.LABEL_XLSX)
+def label_lookup(label_path: str) -> dict[str, tuple[int, int]]:
+    df = load_label_table(label_path)
     return {r.name: (int(r.cls), int(r.ambig)) for r in df.itertuples()}
 
 
@@ -183,7 +186,31 @@ LABEL_TAGS = {0: "정상", 1: "비정상", 2: "분류어려움"}
 
 
 @st.cache_data
-def split_samples(run_dir: str) -> tuple[list[str], list[str], list[str]]:
+def run_label_path(run_dir: str) -> str:
+    """그 실행이 평가 기준으로 삼은 라벨 엑셀의 경로.
+
+    옛 라벨로 돌린 실행을 열었을 때 화면의 '실제 라벨' 이 현재 엑셀 기준이면,
+    그 사이 분류가 바뀐 메쉬에서 "맞았다는데 왜 틀렸다고 나오지?" 가 된다.
+    실행마다 그때의 기준을 따라간다.
+    """
+    rj = os.path.join(run_dir, "result.json")
+    lab = None
+    if os.path.isfile(rj):
+        with open(rj, "r", encoding="utf-8") as fh:
+            res = json.load(fh)
+        lab = res.get("label_xlsx")
+        if not lab:   # 옛 실행에는 기록이 없다. 학습대상 개수로 되짚는다.
+            lab = {3223: "fe model 1D index 0918.xlsx",
+                   3214: "fe model 1D index 0721.xlsx"}.get(res.get("n_samples"))
+    if lab:
+        cand = os.path.join(paths.ROOT, lab)
+        if os.path.isfile(cand):
+            return cand
+    return paths.LABEL_XLSX
+
+
+@st.cache_data
+def split_samples(run_dir: str, label_path: str) -> tuple[list[str], list[str], list[str]]:
     """폴더의 모델을 세 묶음으로 나눈다.
 
     (학습에 쓴 것, 평가 전용 홀드아웃, 애매·분류어려움)
@@ -194,7 +221,7 @@ def split_samples(run_dir: str) -> tuple[list[str], list[str], list[str]]:
     """
     paired = set(available_samples())
     hold = set(holdout_names(run_dir))
-    tbl = load_label_table(paths.LABEL_XLSX)
+    tbl = load_label_table(label_path)
 
     # 5-fold 실행은 그 실행이 돌 때의 학습대상 명단(oof_names.txt)을 그대로 쓴다.
     # 지금 라벨 엑셀로 다시 뽑으면 개수가 안 맞는다 - 0721 로 돌린 실행은 3214개인데
@@ -240,9 +267,9 @@ def holdout_names(run_dir: str) -> list[str]:
         return fh.read().splitlines()
 
 
-def label_tag(name: str) -> str:
+def label_tag(name: str, label_path: str) -> str:
     """이름 옆에 괄호로 붙일 라벨 표시 - (정상) (비정상) (애매·비정상) (분류어려움)."""
-    lab = label_lookup().get(name)
+    lab = label_lookup(label_path).get(name)
     if lab is None:
         return "(라벨 없음)"
     cls, ambig = lab
@@ -269,9 +296,10 @@ def pick_display(disp: list[str], names: list[str], key: str, title: str) -> str
     return dict(pairs)[pick]
 
 
-def pick_by_label(names: list[str], key: str, title: str) -> str | None:
+def pick_by_label(names: list[str], key: str, title: str, label_path: str) -> str | None:
     """이름 옆에 라벨을 붙여 고르게 하고 고른 이름을 돌려준다."""
-    return pick_display([f"{n}  {label_tag(n)}" for n in names], names, key, title)
+    return pick_display([f"{n}  {label_tag(n, label_path)}" for n in names],
+                        names, key, title)
 
 
 @st.cache_data
@@ -854,25 +882,25 @@ with st.sidebar:
     choices = list(run_paths)
     run_name = st.selectbox("모델 실행", choices, index=choices.index(default_run))
     run_dir = run_paths[run_name]
+
+    # 화면 전체가 '그 실행이 평가 기준으로 삼은 라벨' 을 쓰도록 맞춘다. 아래에서
+    # 읽는 그래프 캐시의 라벨(get_run_context)도 이 값을 따라간다.
+    LBL = run_label_path(run_dir)
+    paths.LABEL_XLSX = LBL
+    if os.path.basename(LBL) != os.path.basename(paths_label_default):
+        st.info(f"이 실행의 기준 라벨 **{os.path.basename(LBL)}** 로 화면을 표시합니다.")
     if run_name.startswith("[검증]"):
-        _rm = load_run_metrics(run_dir)
-        _lab = (_rm or {}).get("label_xlsx")
-        if not _lab:
-            # 옛 실행에는 기록이 없다. 학습대상 개수로 되짚는다.
-            _lab = {3223: "fe model 1D index 0918.xlsx",
-                    3214: "fe model 1D index 0721.xlsx"}.get((_rm or {}).get("n_samples"))
-        _cur = os.path.basename(paths.LABEL_XLSX)
-        if _lab and _lab != _cur:
-            st.warning(
-                f"이 실행은 **{_lab}** 로 평가됐는데, 지금 화면의 라벨은 **{_cur}** 입니다. "
-                f"목록 옆 괄호와 '실제 라벨' 칸은 현재 엑셀 기준이라, 그 사이 분류가 바뀐 "
-                f"메쉬는 서로 다를 수 있습니다."
+        if has_full_model(run_dir):
+            st.error(
+                "**배포본이 아닙니다.** 비교용으로 따로 학습한 단일 모델입니다 "
+                "(현재 배포 라벨과 다른 기준으로 학습된 경우가 많습니다)."
             )
-        st.error(
-            "**검증용 실행입니다 - 배포본이 아닙니다.** 성능을 재려고 만든 fold 모델이라, "
-            "메쉬마다 어느 fold 가 판정할지를 그때그때 계산합니다. 같은 메쉬라도 환경에 "
-            "따라 다른 답이 나올 수 있습니다."
-        )
+        else:
+            st.error(
+                "**검증용 실행입니다 - 배포본이 아닙니다.** 성능을 재려고 만든 fold "
+                "모델이라, 메쉬마다 어느 fold 가 판정할지를 그때그때 계산합니다. 같은 "
+                "메쉬라도 환경에 따라 다른 답이 나올 수 있습니다."
+            )
 
     run_metrics = load_run_metrics(run_dir)
     if run_metrics and run_metrics["mode"] == "full":
@@ -903,7 +931,7 @@ with st.sidebar:
 
     st.divider()
     st.subheader("파일 선택")
-    fit_names, hold_names, amb_names = split_samples(run_dir)
+    fit_names, hold_names, amb_names = split_samples(run_dir, LBL)
     # 5-fold 실행에서는 학습대상 전체가 이미 정직하게 평가되어 있다(OOF). 배포 모델처럼
     # "학습에 썼으니 못 믿는다"가 아니다 - 라벨 버전별 평가 결과를 볼 때 이 경로를 쓴다.
     is_cv_run = not has_full_model(run_dir)
@@ -938,7 +966,7 @@ with st.sidebar:
                 "모델이 **학습에 쓴** 메쉬입니다. 예측이 라벨과 잘 맞는 것은 당연하며, "
                 "이 화면의 값은 성능 근거가 되지 못합니다."
             )
-        nm = pick_by_label(fit_names, "search_fit", "모델 이름")
+        nm = pick_by_label(fit_names, "search_fit", "모델 이름", LBL)
         if nm:
             rep = parse_sample(nm)
 
@@ -953,7 +981,7 @@ with st.sidebar:
             if len(known):
                 acc = float((known["pred"] == known["cls"]).mean())
                 st.caption(f"{len(known)}개 기준 **일치율 {acc:.1%}**")
-        nm = pick_by_label(hold_names, "search_hold", "모델 이름")
+        nm = pick_by_label(hold_names, "search_hold", "모델 이름", LBL)
         if nm:
             rep = parse_sample(nm)
 
@@ -969,9 +997,9 @@ with st.sidebar:
                  "분류어려움=정상/비정상 자체를 정하지 못한 것.",
         )
         if kind == "애매만":
-            shown = [n for n in amb_names if label_lookup().get(n, (0, 0))[0] != 2]
+            shown = [n for n in amb_names if label_lookup(LBL).get(n, (0, 0))[0] != 2]
         elif kind == "분류어려움만":
-            shown = [n for n in amb_names if label_lookup().get(n, (0, 0))[0] == 2]
+            shown = [n for n in amb_names if label_lookup(LBL).get(n, (0, 0))[0] == 2]
         else:
             shown = amb_names
 
@@ -990,7 +1018,7 @@ with st.sidebar:
         if not shown:
             st.info("해당하는 메쉬가 없습니다.")
         else:
-            nm = pick_by_label(shown, "search_amb", "모델 이름")
+            nm = pick_by_label(shown, "search_amb", "모델 이름", LBL)
             if nm:
                 rep = parse_sample(nm)
 
@@ -1056,7 +1084,7 @@ with st.sidebar:
             if sub.empty:
                 st.info("해당하는 사례가 없습니다.")
             else:
-                disp = [f"[{r.kind}] {r.name}  {label_tag(r.name)}  p={r.prob:.3f}"
+                disp = [f"[{r.kind}] {r.name}  {label_tag(r.name, LBL)}  p={r.prob:.3f}"
                         for r in sub.itertuples()]
                 nm = pick_display(disp, list(sub["name"]), "search_err", "사례")
                 if nm:
@@ -1162,7 +1190,7 @@ if result["truth"] is not None:
     col2.metric("실제 라벨", truth_str, "일치" if correct else "불일치",
                delta_color="normal" if correct else "inverse")
 else:
-    lab = label_lookup().get(rep.name)
+    lab = label_lookup(LBL).get(rep.name)
     if lab:
         cls, ambig = lab
         tag = {0: "정상", 1: "비정상", 2: "분류어려움"}[cls]
