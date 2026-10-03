@@ -152,19 +152,39 @@ LABEL_TAGS = {0: "정상", 1: "비정상", 2: "분류어려움"}
 
 
 @st.cache_data
-def split_samples() -> tuple[list[str], list[str]]:
-    """폴더의 모델을 (학습에 쓴 것, 학습에 안 쓴 것) 으로 나눈다.
+def split_samples(run_dir: str) -> tuple[list[str], list[str], list[str]]:
+    """폴더의 모델을 세 묶음으로 나눈다.
 
-    학습 대상은 '확실 & 분류 가능' 인 것뿐이라, 나머지(애매/분류어려움)는 모델이
-    한 번도 보지 못한 데이터다. 그래서 그쪽이 곧 test 집합이 된다.
+    (학습에 쓴 것, 평가 전용 홀드아웃, 애매·분류어려움)
+
+    - 학습에 쓴 것 : 모델이 정답을 본 메쉬. 잘 맞는 게 당연해서 성능 근거가 못 된다
+    - 홀드아웃     : 확실한 라벨인데 일부러 빼둔 몫. **성능은 여기서 나온다**
+    - 애매·분류어려움 : 사람이 확신 못 해 학습에서 제외한 것. 정답 자체가 불확실하다
     """
     paired = set(available_samples())
+    hold = set(holdout_names(run_dir))
     tbl = load_label_table(paths.LABEL_XLSX)
-    tr, te = [], []
+    fit, ho, amb = [], [], []
     for r in tbl.itertuples():
-        if r.name in paired:
-            (tr if r.trainable else te).append(r.name)
-    return sorted(tr), sorted(te)
+        if r.name not in paired:
+            continue
+        if not r.trainable:
+            amb.append(r.name)
+        elif r.name in hold:
+            ho.append(r.name)
+        else:
+            fit.append(r.name)
+    return sorted(fit), sorted(ho), sorted(amb)
+
+
+@st.cache_data
+def holdout_names(run_dir: str) -> list[str]:
+    """이 실행이 평가 전용으로 빼둔 메쉬 이름. 없으면 빈 목록(= 전부 학습에 씀)."""
+    path = os.path.join(run_dir, "holdout_names.txt")
+    if not os.path.isfile(path):
+        return []
+    with open(path, "r", encoding="utf-8") as fh:
+        return fh.read().splitlines()
 
 
 def label_tag(name: str) -> str:
@@ -213,6 +233,9 @@ def load_run_metrics(run_dir: str) -> dict | None:
         "mode": res.get("mode", "cv"),
         "fold_mean": res.get("fold_mean"),
         "n_samples": res.get("n_samples"),
+        "n_fit": res.get("n_fit"),
+        "n_holdout": res.get("n_holdout") or 0,
+        "metrics": res.get("metrics") or {},
         "label_xlsx": res.get("label_xlsx"),
     }
 
@@ -771,9 +794,16 @@ with st.sidebar:
     run_metrics = load_run_metrics(run_dir)
     if run_metrics and run_metrics["mode"] == "full":
         st.caption(
-            f"**전체 학습 단일 모델** (학습대상 {run_metrics['n_samples']}개). "
-            f"fold 분할이 없어 어느 PC에서 열어도 같은 결과가 나옵니다. "
-            f"화면의 모든 확률은 이 모델 하나에서 나옵니다."
+            (
+                f"**단일 모델** · 학습 {run_metrics['n_fit']}개"
+                + (f" / 평가 전용 {run_metrics['n_holdout']}개"
+                   if run_metrics["n_holdout"] else "")
+                + ". fold 분할이 없어 어느 PC에서 열어도 같은 결과가 나옵니다."
+                + (f"  홀드아웃 성능 — AUC **{run_metrics['metrics'].get('auc', 0):.4f}** · "
+                   f"ACC **{run_metrics['metrics'].get('acc', 0):.4f}** · "
+                   f"F1 **{run_metrics['metrics'].get('f1', 0):.4f}**"
+                   if run_metrics["n_holdout"] else "")
+            )
         )
     elif run_metrics and run_metrics["fold_mean"]:
         fm = run_metrics["fold_mean"]
@@ -790,46 +820,63 @@ with st.sidebar:
 
     st.divider()
     st.subheader("파일 선택")
-    train_names, test_names = split_samples()
-    SRC_TRAIN = f"학습 데이터 train ({len(train_names)}개)"
-    SRC_TEST = f"테스트 데이터 test ({len(test_names)}개)"
+    fit_names, hold_names, amb_names = split_samples(run_dir)
+    SRC_FIT = f"학습에 쓴 메쉬 ({len(fit_names)}개)"
+    SRC_HOLD = f"평가 전용 홀드아웃 ({len(hold_names)}개)"
+    SRC_AMB = f"애매·분류어려움 ({len(amb_names)}개)"
     SRC_ERR = "오분류·경계선 사례 (FP/FN)"
     SRC_UPLOAD = "직접 업로드"
 
+    sources = [SRC_FIT] + ([SRC_HOLD] if hold_names else []) + [SRC_AMB, SRC_ERR, SRC_UPLOAD]
     source = st.radio(
-        "불러올 방식", [SRC_TRAIN, SRC_TEST, SRC_ERR, SRC_UPLOAD],
-        help="train=확실한 라벨이라 모델이 학습에 쓴 메쉬. "
-             "test=애매하거나 분류가 어려워 학습에서 제외한 메쉬로, 모델이 한 번도 "
-             "본 적이 없다.",
+        "불러올 방식", sources,
+        help="학습에 쓴 메쉬=모델이 정답을 이미 본 것. "
+             "평가 전용 홀드아웃=확실한 라벨인데 일부러 빼둔 몫으로, 성능은 여기서 나온다. "
+             "애매·분류어려움=사람이 확신 못 해 학습에서 뺀 것.",
     )
 
     rep: MeshRep | None = None
-    if source == SRC_TRAIN:
+    if source == SRC_FIT:
         st.caption(
             "모델이 **학습에 쓴** 메쉬입니다. 예측이 라벨과 잘 맞는 것은 당연하며, "
             "이 화면의 값은 성능 근거가 되지 못합니다."
         )
-        nm = pick_by_label(train_names, "search_train", "모델 이름")
+        nm = pick_by_label(fit_names, "search_fit", "모델 이름")
         if nm:
             rep = parse_sample(nm)
 
-    elif source == SRC_TEST:
+    elif source == SRC_HOLD:
         st.caption(
-            "애매하거나 분류가 어려워 **학습에서 제외한** 메쉬입니다. "
-            "모델이 한 번도 본 적이 없는 메쉬들입니다."
+            "학습에서 **일부러 빼둔** 메쉬입니다. 가중치 학습에도, 조기종료 판단에도 "
+            "쓰이지 않았습니다. **이 모델의 성능은 이 묶음에서 나옵니다.**"
+        )
+        stat_df = load_predictions(run_dir)
+        if not stat_df.empty:
+            known = stat_df[stat_df["name"].isin(hold_names) & (stat_df["cls"] <= 1)]
+            if len(known):
+                acc = float((known["pred"] == known["cls"]).mean())
+                st.caption(f"{len(known)}개 기준 **일치율 {acc:.1%}**")
+        nm = pick_by_label(hold_names, "search_hold", "모델 이름")
+        if nm:
+            rep = parse_sample(nm)
+
+    elif source == SRC_AMB:
+        st.caption(
+            "애매하거나 분류가 어려워 **학습에서 제외한** 메쉬입니다. 모델이 본 적은 "
+            "없지만, 사람도 판단이 어려웠던 사례라 '정답' 자체가 불확실합니다."
         )
         kind = st.radio(
             "무엇을 볼지", ["둘 다", "애매만", "분류어려움만"],
-            horizontal=True, key="test_kind",
+            horizontal=True, key="amb_kind",
             help="애매=사람이 정상/비정상 판정에 확신이 없었던 것. "
                  "분류어려움=정상/비정상 자체를 정하지 못한 것.",
         )
         if kind == "애매만":
-            shown = [n for n in test_names if label_lookup().get(n, (0, 0))[0] != 2]
+            shown = [n for n in amb_names if label_lookup().get(n, (0, 0))[0] != 2]
         elif kind == "분류어려움만":
-            shown = [n for n in test_names if label_lookup().get(n, (0, 0))[0] == 2]
+            shown = [n for n in amb_names if label_lookup().get(n, (0, 0))[0] == 2]
         else:
-            shown = test_names
+            shown = amb_names
 
         stat_df = load_predictions(run_dir)
         if not stat_df.empty:
@@ -837,9 +884,8 @@ with st.sidebar:
             if len(known):
                 acc = float((known["pred"] == known["cls"]).mean())
                 st.caption(
-                    f"이 집합에서 라벨이 정상/비정상인 {len(known)}개 기준 "
-                    f"**모델-라벨 일치율 {acc:.1%}** "
-                    f"(참고용 - 사람도 판단이 어려웠던 사례라 '정답'이 불확실합니다)"
+                    f"라벨이 정상/비정상인 {len(known)}개 기준 **일치율 {acc:.1%}** "
+                    f"(참고용 - '정답'이 불확실한 집합입니다)"
                 )
             else:
                 st.caption("전부 분류어려움이라 일치율을 낼 수 없습니다.")
@@ -847,7 +893,7 @@ with st.sidebar:
         if not shown:
             st.info("해당하는 메쉬가 없습니다.")
         else:
-            nm = pick_by_label(shown, "search_test", "모델 이름")
+            nm = pick_by_label(shown, "search_amb", "모델 이름")
             if nm:
                 rep = parse_sample(nm)
 
@@ -859,13 +905,18 @@ with st.sidebar:
                 "`python scripts/train_deploy.py` 를 다시 돌리면 만들어집니다."
             )
         else:
+            _hold = set(hold_names)
+            opts = ["학습에 쓴 메쉬"] + (["홀드아웃"] if _hold else []) + ["애매·분류어려움", "전체"]
             scope = st.radio(
-                "어느 집합에서", ["train", "test", "둘 다"], horizontal=True, key="err_scope",
-                help="train=모델이 학습에 쓴 메쉬. test=애매/분류어려움이라 학습에서 뺀 메쉬.",
+                "어느 집합에서", opts, horizontal=True, key="err_scope",
+                help="홀드아웃=학습에서 빼둔 몫이라 여기 오분류가 실제 실력에 가깝다. "
+                     "학습에 쓴 메쉬의 오분류는 '외우고도 틀린 것'이라 성격이 다르다.",
             )
-            if scope == "train":
-                pool = pred_df[pred_df["trainable"] == 1]
-            elif scope == "test":
+            if scope == "학습에 쓴 메쉬":
+                pool = pred_df[(pred_df["trainable"] == 1) & (~pred_df["name"].isin(_hold))]
+            elif scope == "홀드아웃":
+                pool = pred_df[pred_df["name"].isin(_hold)]
+            elif scope == "애매·분류어려움":
                 pool = pred_df[pred_df["trainable"] == 0]
             else:
                 pool = pred_df
