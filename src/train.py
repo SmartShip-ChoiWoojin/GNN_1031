@@ -445,6 +445,7 @@ def main(argv: list[str] | None = None) -> int:
         "confusion_matrix": cm.tolist(),
         "baseline": BASELINE,
         "n_samples": int(len(y)),
+        "label_xlsx": os.path.basename(paths.LABEL_XLSX),
     }
     with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as fh:
         json.dump(result, fh, ensure_ascii=False, indent=2)

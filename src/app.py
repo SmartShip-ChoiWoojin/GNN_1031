@@ -95,6 +95,54 @@ def available_samples() -> list[str]:
 
 
 @st.cache_data
+def validation_runs() -> dict[str, str]:
+    """{표시이름: 경로} - runs/validate 와 그 안의 archive.
+
+    개발자 모드에서만 쓴다. 여기 모델은 성능을 재려고 만든 것이라 배포본이 아니다.
+    """
+    out: dict[str, str] = {}
+    for root, prefix in ((paths.RUNS_VALIDATE, ""), (paths.RUNS_ARCHIVE, "archive/")):
+        for d in sorted(glob.glob(os.path.join(root, "*"))):
+            if os.path.isdir(d) and os.path.isfile(os.path.join(d, "result.json")):
+                out[prefix + os.path.basename(d)] = d
+    return out
+
+
+@st.cache_data
+def validation_table() -> pd.DataFrame:
+    """검증 실행들의 성능 비교표. 라벨 버전을 같이 보여준다."""
+    rows = []
+    for name, d in validation_runs().items():
+        with open(os.path.join(d, "result.json"), "r", encoding="utf-8") as fh:
+            res = json.load(fh)
+        fm = res.get("fold_mean") or {}
+        n = res.get("n_samples")
+        # 옛 실행에는 label_xlsx 기록이 없다. 학습 대상 개수로 되짚는다.
+        lab = res.get("label_xlsx")
+        if not lab:
+            lab = {3223: "0918 (추정)", 3214: "0721 (추정)"}.get(n, "알 수 없음")
+        a = res.get("args", {})
+        opt = []
+        if a.get("separate_encoder"):
+            opt.append("인코더분리")
+        if a.get("no_graph_features"):
+            opt.append("집계피처off")
+        if a.get("final_epoch"):
+            opt.append("final-epoch")
+        rows.append({
+            "실행": name,
+            "라벨": lab,
+            "샘플": n,
+            "AUC": round(fm.get("auc", float("nan")), 4),
+            "ACC": round(fm.get("acc", float("nan")), 4),
+            "F1": round(fm.get("f1", float("nan")), 4),
+            "설정": f"{a.get('graph','')}/{a.get('conv','')} " + ",".join(opt),
+        })
+    df = pd.DataFrame(rows)
+    return df.sort_values(["라벨", "AUC"], ascending=[False, False]) if len(df) else df
+
+
+@st.cache_data
 def label_lookup() -> dict[str, tuple[int, int]]:
     df = load_label_table(paths.LABEL_XLSX)
     return {r.name: (int(r.cls), int(r.ambig)) for r in df.itertuples()}
@@ -689,15 +737,36 @@ if not runs:
 
 with st.sidebar:
     st.header("설정")
+
+    # 개발자 모드 - 성능 측정용(runs/validate) 실행까지 꺼내 본다. 기본은 꺼짐.
+    # 배포본을 쓰는 사람에게 측정용 모델이 보이면 또 "왜 결과가 다르냐"가 생긴다.
+    dev_mode = st.checkbox(
+        "개발자 모드", value=False,
+        help="검증용 5-fold 실행의 성능 비교표를 보고, 그 실행을 직접 불러올 수 있습니다. "
+             "검증용 모델은 배포본이 아닙니다.",
+    )
+
     # 배포용 단일 모델(full.pt)이 있는 실행을 우선 고른다 - 그래야 어느 PC 에서
     # 열어도 같은 판정이 나온다. 없으면 예전 5-fold 실행으로 되돌아간다.
     _full_runs = [r for r in runs if has_full_model(os.path.join(paths.RUNS_TRAIN, r))]
     if _full_runs:
         default_run = _full_runs[0]
     else:
-        default_run = "final" if "final" in runs else runs[0]
-    run_name = st.selectbox("모델 실행", runs, index=runs.index(default_run))
-    run_dir = os.path.join(paths.RUNS_TRAIN, run_name)
+        default_run = runs[0]
+
+    run_paths = {r: os.path.join(paths.RUNS_TRAIN, r) for r in runs}
+    if dev_mode:
+        run_paths.update({f"[검증] {k}": v for k, v in validation_runs().items()})
+
+    choices = list(run_paths)
+    run_name = st.selectbox("모델 실행", choices, index=choices.index(default_run))
+    run_dir = run_paths[run_name]
+    if run_name.startswith("[검증]"):
+        st.error(
+            "**검증용 실행입니다 - 배포본이 아닙니다.** 성능을 재려고 만든 fold 모델이라, "
+            "메쉬마다 어느 fold 가 판정할지를 그때그때 계산합니다. 같은 메쉬라도 환경에 "
+            "따라 다른 답이 나올 수 있습니다."
+        )
 
     run_metrics = load_run_metrics(run_dir)
     if run_metrics and run_metrics["mode"] == "full":
@@ -875,6 +944,57 @@ with st.sidebar:
         disabled=not highlight,
         help="이 배수 이상인 요소만 빨강으로 칠합니다. 나머지는 회색 그대로 둡니다.",
     )
+
+if dev_mode:
+    with st.expander("검증 실행 비교 (개발자용)", expanded=True):
+        vt = validation_table()
+        if vt.empty:
+            st.info("runs/validate 에 결과가 없습니다. `python scripts/run_validation.py` 로 만듭니다.")
+        else:
+            # 설정이 같고 라벨 버전만 다른 쌍을 찾아 먼저 보여준다. 15개 표에서
+            # 비교 가능한 두 줄을 사람이 눈으로 찾게 하면 엉뚱한 것끼리 비교하게 된다.
+            # 같은 설정·같은 라벨인 실행이 여러 개면(시드만 다른 반복) 평균을 쓴다.
+            # 그중 하나를 집으면 어느 것을 집느냐에 따라 결론이 흔들린다.
+            vt2 = vt.copy()
+            vt2["라벨키"] = vt2["라벨"].astype(str).str[:4]
+            agg = vt2.groupby(["설정", "라벨키"]).agg(
+                AUC=("AUC", "mean"), ACC=("ACC", "mean"), F1=("F1", "mean"),
+                n=("실행", "count"),
+            ).reset_index()
+
+            pairs = []
+            for cfg, g in agg.groupby("설정"):
+                labs = {r["라벨키"]: r for _, r in g.iterrows()}
+                if "0721" in labs and "0918" in labs:
+                    pairs.append((cfg, labs["0721"], labs["0918"]))
+            if pairs:
+                st.markdown("**같은 설정 · 라벨 버전만 다른 쌍** (같은 설정이 여러 번 돌았으면 평균)")
+                for cfg, a_, b_ in pairs:
+                    cols = st.columns(4)
+                    cols[0].markdown(
+                        f"`{cfg}`<br>0721 {int(a_['n'])}회 → 0918 {int(b_['n'])}회",
+                        unsafe_allow_html=True,
+                    )
+                    for c, k in zip(cols[1:], ("AUC", "ACC", "F1")):
+                        c.metric(k, f"{b_[k]:.4f}", f"{b_[k] - a_[k]:+.4f}")
+                st.caption(
+                    "위 화살표는 **성능 향상이 아니라 라벨 교체의 효과**다. 340개의 정답이 "
+                    "바뀌었으므로 두 수치는 서로 다른 시험의 점수다."
+                )
+                st.divider()
+
+            st.dataframe(vt, width="stretch", hide_index=True)
+            st.warning(
+                "**라벨 버전이 다른 실행끼리 수치를 비교하면 안 됩니다.** 0721 에서 0918 로 "
+                "오면서 340개 메쉬의 정답이 바뀌었습니다. 즉 시험 문제 자체가 달라진 것이라, "
+                "숫자가 올라간 것을 '모델이 좋아졌다'고 읽으면 틀립니다. "
+                "**라벨이 정확해져서 채점 기준이 제대로 선 것**입니다."
+            )
+            st.caption(
+                "같은 라벨 안에서는 비교할 수 있습니다. 다만 같은 설정을 다시 돌려도 "
+                "AUC 가 ±0.002 정도는 움직입니다(초기 가중치·배치 순서). 그 이하 차이로 "
+                "우열을 말하면 안 됩니다."
+            )
 
 if rep is None:
     st.info("왼쪽에서 모델을 선택하거나 .bdf 파일을 업로드하세요.")
