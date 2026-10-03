@@ -90,7 +90,8 @@ def main() -> int:
     print("")
     print("[4] MODEL FILES  << most important")
     found_full = False
-    for run in sorted(glob.glob(os.path.join(paths.RUNS_DIR, "*"))):
+    for run in sorted(glob.glob(os.path.join(paths.RUNS_TRAIN, "*"))
+                      + glob.glob(os.path.join(paths.RUNS_VALIDATE, "*"))):
         full = os.path.join(run, "full.pt")
         if os.path.isfile(full):
             found_full = True

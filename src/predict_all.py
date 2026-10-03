@@ -3,7 +3,7 @@
 앱이 오분류 목록이나 집합별 일치율을 보여줄 때마다 수천 번 추론하면 느리다.
 배포 모델은 고정이므로 결과도 고정 - 배포 전에 한 번 계산해 같이 넣어둔다.
 
-    python src/predict_all.py --run runs/deploy
+    python src/predict_all.py --run runs/train/deploy
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from meshrep import MeshRep
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="배포 모델로 전 메쉬 예측 캐시 생성")
-    ap.add_argument("--run", default=os.path.join(paths.RUNS_DIR, "deploy"))
+    ap.add_argument("--run", default=os.path.join(paths.RUNS_TRAIN, "deploy"))
     ap.add_argument("--cpu", action="store_true")
     a = ap.parse_args(argv)
 

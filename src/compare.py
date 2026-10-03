@@ -44,7 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--runs", default=None, help="실행 디렉터리 glob (기본: runs/*)")
     a = ap.parse_args(argv)
 
-    pattern = a.runs or os.path.join(paths.RUNS_DIR, "*")
+    # 성능 비교는 검증 실행(5-fold)끼리만 의미가 있다.
+    pattern = a.runs or os.path.join(paths.RUNS_VALIDATE, "*")
     rows = []
     for d in sorted(glob.glob(pattern)):
         rj = os.path.join(d, "result.json")

@@ -77,9 +77,14 @@ EXT_MARKER = "#06b6d4"
 @st.cache_data
 def available_runs() -> list[str]:
     out = []
-    for d in sorted(glob.glob(os.path.join(paths.RUNS_DIR, "*"))):
+    # 배포용(runs/train) 만 보여준다. 검증용 5-fold 실행을 사용자가 고를 수 있으면
+    # 또 "왜 결과가 다르냐" 가 반복된다.
+    for d in sorted(glob.glob(os.path.join(paths.RUNS_TRAIN, "*"))):
+        name = os.path.basename(d)
+        if name == "calib":
+            continue   # 최적 epoch 와 보정 계수를 구하려고 만든 중간 산출물. 배포본이 아니다.
         if os.path.isfile(os.path.join(d, "result.json")):
-            out.append(os.path.basename(d))
+            out.append(name)
     return out
 
 
@@ -676,20 +681,23 @@ st.title("FE 메쉬 정상/비정상 뷰어")
 
 runs = available_runs()
 if not runs:
-    st.error(f"학습된 실행이 없습니다. 먼저 `python src/train.py` 로 학습하세요. ({paths.RUNS_DIR})")
+    st.error(
+        f"배포용 모델이 없습니다. `python scripts/train_deploy.py` 로 먼저 학습하세요."
+        f"\n\n찾은 위치: {paths.RUNS_TRAIN}"
+    )
     st.stop()
 
 with st.sidebar:
     st.header("설정")
     # 배포용 단일 모델(full.pt)이 있는 실행을 우선 고른다 - 그래야 어느 PC 에서
     # 열어도 같은 판정이 나온다. 없으면 예전 5-fold 실행으로 되돌아간다.
-    _full_runs = [r for r in runs if has_full_model(os.path.join(paths.RUNS_DIR, r))]
+    _full_runs = [r for r in runs if has_full_model(os.path.join(paths.RUNS_TRAIN, r))]
     if _full_runs:
         default_run = _full_runs[0]
     else:
         default_run = "final" if "final" in runs else runs[0]
     run_name = st.selectbox("모델 실행", runs, index=runs.index(default_run))
-    run_dir = os.path.join(paths.RUNS_DIR, run_name)
+    run_dir = os.path.join(paths.RUNS_TRAIN, run_name)
 
     run_metrics = load_run_metrics(run_dir)
     if run_metrics and run_metrics["mode"] == "full":
@@ -779,7 +787,7 @@ with st.sidebar:
         if pred_df.empty:
             st.warning(
                 "이 실행에는 predictions.csv 가 없습니다. "
-                "`python src/predict_all.py --run <실행폴더>` 로 만들 수 있습니다."
+                "`python scripts/train_deploy.py` 를 다시 돌리면 만들어집니다."
             )
         else:
             scope = st.radio(

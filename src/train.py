@@ -291,7 +291,10 @@ def main(argv: list[str] | None = None) -> int:
         "cuda" if (torch.cuda.is_available() and not args.cpu) else "cpu"
     )
     tag = args.tag or f"{args.graph}_{args.conv}"
-    run_dir = os.path.join(paths.RUNS_DIR, tag)
+    # 전체 학습(--full)은 배포용이므로 runs/train/, fold 로 나누는 실행은 성능 측정용
+    # 이므로 runs/validate/ 에 둔다. 섞이지 않게 저장 위치 자체를 분리한다.
+    run_root = paths.RUNS_TRAIN if args.full else paths.RUNS_VALIDATE
+    run_dir = os.path.join(run_root, tag)
     os.makedirs(run_dir, exist_ok=True)
 
     opts: dict = {}
