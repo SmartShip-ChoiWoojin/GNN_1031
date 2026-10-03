@@ -48,6 +48,28 @@ def load_result(run_dir: str) -> dict:
         return json.load(fh)
 
 
+def load_fold_map(run_dir: str) -> dict[str, int] | None:
+    """학습 때 저장해 둔 fold 배정({이름: fold}). 없으면 None.
+
+    예전에는 화면에서 이것을 매번 다시 계산했는데, 그 계산은 학습대상 목록의 순서와
+    층화 기준에 의존한다. 목록이 하나만 달라도 대부분의 메쉬가 다른 fold 로 가고,
+    결국 '그 메쉬를 학습에 쓴 모델' 이 채점하게 된다. 그래서 기록을 읽는다.
+    """
+    path = os.path.join(run_dir, "fold_of.csv")
+    if not os.path.isfile(path):
+        return None
+    out: dict[str, int] = {}
+    with open(path, "r", encoding="utf-8") as fh:
+        next(fh, None)
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            nm, fo = line.rsplit(",", 1)
+            out[nm] = int(fo)
+    return out
+
+
 def fold_assignment(names: list[str], labels: list[int], args: SimpleNamespace) -> np.ndarray:
     """각 샘플이 어느 fold 의 test 였는지 복원한다.
 

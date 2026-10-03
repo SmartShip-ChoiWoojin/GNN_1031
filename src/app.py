@@ -46,6 +46,7 @@ from bdf_io import discover_pairs, load_raw_mesh, read_bdf
 from explain import (
     attention_for,
     fold_assignment,
+    load_fold_map,
     load_fold_model,
     load_full_model,
     load_result,
@@ -334,9 +335,11 @@ def get_run_context(run_dir: str):
     if args.graph == "elem":
         opts = {"corner_edges": not args.no_corner_edges, "include_lines": not args.no_lines}
     names, labels, arrays = DS.build_cache(args.graph, opts=opts, verbose=False)
-    # 배포용 단일 모델이 있으면 fold 배정을 아예 계산하지 않는다. 그 계산은 학습대상
-    # 목록의 순서에 의존해서, 목록이 조금만 달라져도 담당 모델이 바뀌던 원인이었다.
-    fold_of = None if has_full_model(run_dir) else fold_assignment(names, labels, args)
+
+    # fold 배정은 학습 때 저장해 둔 기록(fold_of.csv)을 읽는다. 화면에서 다시 계산하면
+    # 학습대상 목록과 층화 기준에 의존해 대부분이 다른 fold 를 가리키고, 결국 '그 메쉬를
+    # 학습에 쓴 모델' 이 채점하게 된다. 배포용 단일 모델에는 fold 자체가 없다.
+    fold_of = None if has_full_model(run_dir) else load_fold_map(run_dir)
     return args, names, labels, arrays, fold_of, opts
 
 
@@ -453,14 +456,14 @@ def predict(rep: MeshRep, run_dir: str, device_str: str) -> dict:
         truth = labels[names.index(rep.name)] if in_train else None
         mode = "전체 학습 단일 모델 (어느 PC에서 열어도 동일한 결과)"
         detail = dict(kind="full", logit=float(logit), platt=platt, in_train=in_train)
-    elif rep.name in names:
-        idx = names.index(rep.name)
-        fold = int(fold_of[idx])
+    elif fold_of and rep.name in fold_of:
+        fold = int(fold_of[rep.name])
+        truth_lbl = labels[names.index(rep.name)] if rep.name in names else 0
         model, norm, _, platt = get_fold_model(run_dir, fold, device_str)
-        logit, alpha = attention_for(ga, rep.name, labels[idx], model, norm, device)
+        logit, alpha = attention_for(ga, rep.name, truth_lbl, model, norm, device)
         prob = 1.0 / (1.0 + np.exp(-(platt[0] * logit + platt[1])))
-        mode = f"fold {fold} 모델 (이 요소를 학습에 쓰지 않음)"
-        truth = labels[idx]
+        mode = f"fold {fold} 모델 (이 메쉬를 학습에 쓰지 않음 · 학습 때 기록된 배정)"
+        truth = labels[names.index(rep.name)] if rep.name in names else None
         detail = dict(kind="single", fold=fold, logit=float(logit), platt=platt)
     else:
         probs, alphas, logits = [], [], []

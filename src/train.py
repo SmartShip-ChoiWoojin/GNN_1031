@@ -556,6 +556,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     with open(os.path.join(run_dir, "oof_names.txt"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(names))
+    # 각 메쉬가 어느 fold 의 평가 몫이었는지 남긴다. 이걸 저장하지 않으면 나중에
+    # 화면에서 다시 계산해야 하는데, 그 계산은 학습대상 목록과 층화 기준에 의존해서
+    # 조건이 조금만 달라도 다른 fold 를 가리킨다 (실제로 그 때문에 같은 메쉬에
+    # 다른 판정이 나오는 사고가 있었다).
+    fold_of = np.zeros(len(names), dtype=int)
+    for k, (_, te) in enumerate(folds, start=1):
+        fold_of[te] = k
+    with open(os.path.join(run_dir, "fold_of.csv"), "w", encoding="utf-8") as fh:
+        fh.write("name,fold" + chr(10))
+        for nm, fo in zip(names, fold_of):
+            fh.write(f"{nm},{fo}" + chr(10))
     print(f"\n저장: {run_dir}")
     return 0
 
