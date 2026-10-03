@@ -85,8 +85,10 @@ def available_runs() -> list[str]:
     cur = os.path.basename(paths.LABEL_XLSX)
     for d in sorted(glob.glob(os.path.join(paths.RUNS_TRAIN, "*"))):
         name = os.path.basename(d)
-        if name.startswith("calib"):
-            continue   # 최적 epoch 와 보정 계수를 구하려고 만든 중간 산출물. 배포본이 아니다.
+        if not name.startswith("deploy"):
+            # 배포 후보는 deploy* 뿐이다. calib* 은 중간 산출물이고, 비교 실험
+            # (all_train_10test_* 등)은 배포하려고 만든 것이 아니다.
+            continue
         rj = os.path.join(d, "result.json")
         if not os.path.isfile(rj):
             continue
@@ -140,6 +142,7 @@ def validation_table() -> pd.DataFrame:
     for name, d in sorted(srcs.items()):
         if os.path.basename(d).startswith("calib"):
             continue   # 최적 epoch 를 찾으려고 돌린 중간 실행. 학습 방식이 달라 비교 대상이 아니다
+
         rj = os.path.join(d, "result.json")
         if not os.path.isfile(rj):
             continue
@@ -1142,43 +1145,45 @@ if dev_mode:
             # 비교 가능한 두 줄을 사람이 눈으로 찾게 하면 엉뚱한 것끼리 비교하게 된다.
             # 같은 설정·같은 라벨인 실행이 여러 개면(시드만 다른 반복) 평균을 쓴다.
             # 그중 하나를 집으면 어느 것을 집느냐에 따라 결론이 흔들린다.
-            vt2 = vt.copy()
-            vt2["라벨키"] = vt2["라벨"].astype(str).str[:4]
-            # 평가 방식까지 같아야 비교가 된다. 홀드아웃(10%)과 교차검증(전체)은
-            # 채점 범위가 달라서 섞으면 안 된다.
-            vt2["설정"] = vt2["설정"] + " · " + vt2["평가 방식"]
-            agg = vt2.groupby(["설정", "라벨키"]).agg(
-                AUC=("AUC", "mean"), ACC=("ACC", "mean"), F1=("F1", "mean"),
-                n=("실행", "count"),
-            ).reset_index()
+            # 라벨만 바꿔 돌린 통제 비교를 찾아 맨 위에 보여준다. 이름 규칙이
+            # <실험이름>_<라벨버전> 이라, 접미사만 다른 쌍이 곧 통제된 비교다.
+            # 설정이나 평가 방식으로 묶으면 조건이 다른 실행까지 섞인다.
+            import re as _re
 
-            pairs = []
-            for cfg, g in agg.groupby("설정"):
-                labs = {r["라벨키"]: r for _, r in g.iterrows()}
-                if "0721" in labs and "0918" in labs:
-                    pairs.append((cfg, labs["0721"], labs["0918"]))
+            fam: dict[str, dict[str, object]] = {}
+            for _, r in vt.iterrows():
+                m = _re.match(r"^(.*)_(\d{4})$", str(r["실행"]).split("/")[-1])
+                if m:
+                    fam.setdefault(m.group(1), {})[m.group(2)] = r
+
+            pairs = [(k, v) for k, v in sorted(fam.items()) if len(v) >= 2]
             if pairs:
-                st.markdown("**같은 설정 · 라벨 버전만 다른 쌍** (같은 설정이 여러 번 돌았으면 평균)")
-                for cfg, a_, b_ in pairs:
-                    cols = st.columns(4)
-                    cols[0].markdown(
-                        f"`{cfg}`<br>0721 {int(a_['n'])}회 → 0918 {int(b_['n'])}회",
-                        unsafe_allow_html=True,
-                    )
-                    for c, k in zip(cols[1:], ("AUC", "ACC", "F1")):
-                        c.metric(k, f"{b_[k]:.4f}", f"{b_[k] - a_[k]:+.4f}")
+                st.markdown("**라벨만 바꿔 돌린 통제 비교**  "
+                            "(데이터·분할·시드·하이퍼파라미터 동일, 정답지만 교체)")
+                for exp, byv in pairs:
+                    vers = sorted(byv)
+                    old_, new_ = byv[vers[0]], byv[vers[-1]]
+                    st.markdown(f"`{exp}`  ·  {vers[0]} → {vers[-1]}  ·  "
+                                f"{old_['평가 방식']} {old_['평가 대상']}개")
+                    cols = st.columns(3)
+                    for c, k in zip(cols, ("AUC", "ACC", "F1")):
+                        c.metric(k, f"{new_[k]:.4f}", f"{new_[k] - old_[k]:+.4f}")
                 st.caption(
-                    "위 화살표는 **성능 향상이 아니라 라벨 교체의 효과**다. 340개의 정답이 "
-                    "바뀌었으므로 두 수치는 서로 다른 시험의 점수다."
+                    "**이 차이는 모델이 좋아진 것이 아니다.** 같은 모델이 서로 다른 정답지로 "
+                    "채점받은 결과다. 게다가 0918 라벨은 0721 모델의 예측을 참고하며 재검토한 "
+                    "것이라, 모델에 유리한 쪽으로 기울어 있다. 성능 주장 근거로 쓰면 안 된다."
                 )
                 st.divider()
 
             st.dataframe(vt, width="stretch", hide_index=True)
             st.warning(
                 "**라벨 버전이 다른 실행끼리 수치를 비교하면 안 됩니다.** 0721 에서 0918 로 "
-                "오면서 340개 메쉬의 정답이 바뀌었습니다. 즉 시험 문제 자체가 달라진 것이라, "
-                "숫자가 올라간 것을 '모델이 좋아졌다'고 읽으면 틀립니다. "
-                "**라벨이 정확해져서 채점 기준이 제대로 선 것**입니다."
+                "오면서 340개 메쉬의 정답이 바뀌었습니다. 시험 문제 자체가 달라진 것이라, "
+                "숫자가 올라간 것을 '모델이 좋아졌다'고 읽으면 틀립니다." + chr(10)*2 +
+                "게다가 0918 라벨은 **0721 모델의 예측을 띄워 보면서** 재검토한 결과입니다. "
+                "바뀐 340개 중 당시 예측을 볼 수 있었던 184개를 보면 **173개(94.5%)가 모델 "
+                "예측과 같아지는 방향**으로 바뀌었습니다. 모델에 유리하게 기울어 있다는 뜻이라, "
+                "0918 기준 수치는 **이 모델의 실제 성능보다 높게 나옵니다.**"
             )
             st.caption(
                 "같은 라벨 안에서는 비교할 수 있습니다. 다만 같은 설정을 다시 돌려도 "

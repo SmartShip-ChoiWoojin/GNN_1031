@@ -266,6 +266,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--label-xlsx", default=None,
                     help="라벨 엑셀을 바꿔서 돌린다 (기본: paths.LABEL_XLSX). "
                          "옛 라벨로 같은 평가를 재현해 비교할 때 쓴다.")
+    ap.add_argument("--label-noise", type=float, default=0.0,
+                    help="학습 몫의 라벨을 이 비율만큼 무작위로 뒤집는다 (평가 몫은 건드리지 "
+                         "않는다). '정답지 품질이 성능을 좌우한다'를 순환논법 없이 보이기 "
+                         "위한 실험용. 오염 비율을 우리가 정하므로 인과가 분명하다.")
+    ap.add_argument("--noise-seed", type=int, default=0)
+    ap.add_argument("--fold-strat-from", default=None,
+                    help="fold 를 나눌 때 층화 기준으로 쓸 라벨 엑셀. 학습 자체는 --label-xlsx "
+                         "라벨로 한다. 라벨 버전만 바꿔 비교할 때 fold 구성까지 달라지는 것을 "
+                         "막는다.")
+    ap.add_argument("--names-from", default=None,
+                    help="학습대상을 이 파일의 이름들로 한정한다(한 줄에 하나). 라벨 버전이 "
+                         "달라 학습대상 집합이 달라지는 것을 막고, 라벨만 다른 비교를 할 때 쓴다.")
     ap.add_argument("--holdout-from", default=None,
                     help="평가 전용 명단을 파일에서 읽는다(한 줄에 하나). 라벨 버전이 달라도 "
                          "같은 메쉬로 채점해 비교하려 할 때 쓴다. --holdout 보다 우선한다.")
@@ -334,6 +346,18 @@ def main(argv: list[str] | None = None) -> int:
     names, labels, arrays = DS.build_cache(
         args.graph, opts=opts, force=args.force_cache, verbose=args.verbose
     )
+    if args.names_from:
+        # 라벨 버전이 달라지면 '확실 & 분류 가능' 조건을 넘나드는 메쉬가 생겨 학습대상
+        # 집합 자체가 달라진다. 그 차이가 성능 비교에 섞이지 않게 집합을 고정한다.
+        with open(args.names_from, "r", encoding="utf-8") as fh:
+            want = set(fh.read().splitlines())
+        keep = [i for i, n in enumerate(names) if n in want]
+        print(f"[train] 학습대상을 명단으로 한정: {len(names)} -> {len(keep)}개 "
+              f"({os.path.basename(args.names_from)})")
+        names = [names[i] for i in keep]
+        labels = [labels[i] for i in keep]
+        arrays = [arrays[i] for i in keep]
+
     y = np.array(labels)
 
     groups = None
@@ -343,12 +367,23 @@ def main(argv: list[str] | None = None) -> int:
         groups = spatial_groups([by_name[n] for n in names])
         print(f"[train] 공간 그룹 {len(set(groups))}개")
 
+    # 층화 기준. 기본은 학습에 쓰는 라벨 그대로지만, 라벨 버전만 바꿔 비교할 때는
+    # fold 구성이 달라지지 않도록 한쪽 라벨로 고정할 수 있다.
+    y_strat = y
+    if args.fold_strat_from:
+        from labels import load_label_table as _llt
+
+        ref = _llt(args.fold_strat_from).set_index("name")
+        y_strat = np.array([int(ref.loc[n].cls) for n in names])
+        print(f"[train] fold 층화 기준: {os.path.basename(args.fold_strat_from)} "
+              f"(학습 라벨과 다른 메쉬 {int((y_strat != y).sum())}개)")
+
     if args.split == "group":
         splitter = StratifiedGroupKFold(args.folds, shuffle=True, random_state=args.seed)
-        folds = list(splitter.split(np.zeros(len(y)), y, groups))
+        folds = list(splitter.split(np.zeros(len(y)), y_strat, groups))
     else:
         splitter = StratifiedKFold(args.folds, shuffle=True, random_state=args.seed)
-        folds = list(splitter.split(np.zeros(len(y)), y))
+        folds = list(splitter.split(np.zeros(len(y)), y_strat))
 
     d_node, d_edge, d_graph = DS.feature_dims(args.graph)
     probe = build_model(d_node, d_edge, d_graph, args)
@@ -377,6 +412,18 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             fit_idx, hold_idx = all_idx, all_idx
+
+        if args.label_noise > 0:
+            # 학습 몫만 오염시킨다. 평가 몫의 정답은 그대로 둬야 "라벨이 나빠지면
+            # 실제 성능이 얼마나 떨어지는가"를 잴 수 있다.
+            rng = np.random.RandomState(args.noise_seed)
+            n_flip = int(round(len(fit_idx) * args.label_noise))
+            flip = rng.choice(fit_idx, size=n_flip, replace=False)
+            labels = list(labels)
+            for i in flip:
+                labels[i] = 1 - labels[i]
+            print(f"   학습 몫 라벨 오염: {n_flip}/{len(fit_idx)}개 뒤집음 "
+                  f"({args.label_noise:.0%}, seed {args.noise_seed}) - 평가 몫은 그대로")
 
         print("")
         print(f"-- 전체 학습 (fold 분할 없음): 학습대상 {len(all_idx)}개")
