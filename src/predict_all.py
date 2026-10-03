@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -33,6 +34,19 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
 
     device = torch.device("cuda" if (torch.cuda.is_available() and not a.cpu) else "cpu")
+
+    # 그 실행이 어떤 라벨로 학습됐는지 따라간다. 지금 기본 엑셀과 다를 수 있다
+    # (옛 라벨로 돌린 비교용 실행). 안 맞추면 엉뚱한 정답과 대조하게 된다.
+    rj = os.path.join(a.run, "result.json")
+    if os.path.isfile(rj):
+        with open(rj, "r", encoding="utf-8") as fh:
+            lab = json.load(fh).get("label_xlsx")
+        if lab:
+            cand = os.path.join(paths.ROOT, lab)
+            if os.path.isfile(cand) and cand != paths.LABEL_XLSX:
+                paths.LABEL_XLSX = cand
+                print(f"[predict_all] 라벨 엑셀을 실행 기준으로 맞춤: {lab}")
+
     model, norm, args, platt = load_full_model(a.run, device)
     opts = {}
     if args.graph == "elem":

@@ -259,6 +259,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--final-epoch", action="store_true",
                     help="조기종료를 끄고 마지막 epoch 가중치를 쓴다 (과적합 시연용). "
                          "검증셋으로 고른 최고 시점 대신 학습 데이터에 끝까지 맞춘 모델.")
+    ap.add_argument("--label-xlsx", default=None,
+                    help="라벨 엑셀을 바꿔서 돌린다 (기본: paths.LABEL_XLSX). "
+                         "옛 라벨로 같은 평가를 재현해 비교할 때 쓴다.")
     ap.add_argument("--holdout", type=float, default=0.0,
                     help="--full 일 때 이 비율을 떼어 평가 전용으로 쓴다 (기본 0=전부 학습). "
                          "0.1 이면 90%% 로 학습하고 10%% 로 정직하게 채점한다. 떼어낸 몫은 "
@@ -286,6 +289,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quiet", dest="verbose", action="store_false")
     ap.add_argument("--force-cache", action="store_true")
     args = ap.parse_args(argv)
+
+    if args.label_xlsx:
+        # 이후 list_samples / load_label_table 이 전부 이 값을 읽는다.
+        paths.LABEL_XLSX = os.path.abspath(args.label_xlsx)
+        print(f"[train] 라벨 엑셀 교체: {os.path.basename(paths.LABEL_XLSX)}")
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)

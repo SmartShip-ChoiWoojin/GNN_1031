@@ -79,12 +79,19 @@ def available_runs() -> list[str]:
     out = []
     # 배포용(runs/train) 만 보여준다. 검증용 5-fold 실행을 사용자가 고를 수 있으면
     # 또 "왜 결과가 다르냐" 가 반복된다.
+    cur = os.path.basename(paths.LABEL_XLSX)
     for d in sorted(glob.glob(os.path.join(paths.RUNS_TRAIN, "*"))):
         name = os.path.basename(d)
-        if name == "calib":
+        if name.startswith("calib"):
             continue   # 최적 epoch 와 보정 계수를 구하려고 만든 중간 산출물. 배포본이 아니다.
-        if os.path.isfile(os.path.join(d, "result.json")):
-            out.append(name)
+        rj = os.path.join(d, "result.json")
+        if not os.path.isfile(rj):
+            continue
+        with open(rj, "r", encoding="utf-8") as fh:
+            lab = json.load(fh).get("label_xlsx")
+        if lab and lab != cur:
+            continue   # 옛 라벨로 돌린 비교용 모델. 배포 후보가 아니다 (개발자 모드에서만)
+        out.append(name)
     return out
 
 
@@ -101,6 +108,12 @@ def validation_runs() -> dict[str, str]:
     개발자 모드에서만 쓴다. 여기 모델은 성능을 재려고 만든 것이라 배포본이 아니다.
     """
     out: dict[str, str] = {}
+    shown = set(available_runs())
+    for d in sorted(glob.glob(os.path.join(paths.RUNS_TRAIN, "*"))):
+        name = os.path.basename(d)
+        if name in shown or not os.path.isfile(os.path.join(d, "result.json")):
+            continue
+        out["train/" + name] = d          # 옛 라벨로 돌린 홀드아웃 모델, 보정용 실행 등
     for root, prefix in ((paths.RUNS_VALIDATE, ""), (paths.RUNS_ARCHIVE, "archive/")):
         for d in sorted(glob.glob(os.path.join(root, "*"))):
             if os.path.isdir(d) and os.path.isfile(os.path.join(d, "result.json")):
@@ -110,36 +123,54 @@ def validation_runs() -> dict[str, str]:
 
 @st.cache_data
 def validation_table() -> pd.DataFrame:
-    """검증 실행들의 성능 비교표. 라벨 버전을 같이 보여준다."""
+    """실행들의 성능 비교표.
+
+    평가 방식이 두 가지라 열로 구분한다.
+      홀드아웃   - 학습대상의 10%를 빼두고 거기서만 채점. 배포 모델이 쓰는 방식
+      교차검증   - 5-fold. 모든 메쉬가 '자기를 학습에 안 쓴 fold' 에게 채점받는다
+    둘은 평가 범위가 달라서 수치를 직접 비교하면 안 된다. 라벨 버전도 같이 본다.
+    """
     rows = []
-    for name, d in validation_runs().items():
-        with open(os.path.join(d, "result.json"), "r", encoding="utf-8") as fh:
+    srcs = dict(validation_runs())
+    srcs.update({k: os.path.join(paths.RUNS_TRAIN, k) for k in available_runs()})
+
+    for name, d in sorted(srcs.items()):
+        if os.path.basename(d).startswith("calib"):
+            continue   # 최적 epoch 를 찾으려고 돌린 중간 실행. 학습 방식이 달라 비교 대상이 아니다
+        rj = os.path.join(d, "result.json")
+        if not os.path.isfile(rj):
+            continue
+        with open(rj, "r", encoding="utf-8") as fh:
             res = json.load(fh)
-        fm = res.get("fold_mean") or {}
         n = res.get("n_samples")
-        # 옛 실행에는 label_xlsx 기록이 없다. 학습 대상 개수로 되짚는다.
         lab = res.get("label_xlsx")
         if not lab:
             lab = {3223: "0918 (추정)", 3214: "0721 (추정)"}.get(n, "알 수 없음")
+        lab = lab.replace("fe model 1D index ", "").replace(".xlsx", "")
+
+        if res.get("mode") == "full":
+            n_hold = res.get("n_holdout") or 0
+            if not n_hold:
+                continue            # 홀드아웃이 없으면 정직한 수치가 없다. 표에 올리지 않는다
+            m, how, scope = res.get("metrics", {}), "홀드아웃", n_hold
+        else:
+            m, how, scope = res.get("fold_mean", {}), "교차검증", n
+
         a = res.get("args", {})
-        opt = []
-        if a.get("separate_encoder"):
-            opt.append("인코더분리")
-        if a.get("no_graph_features"):
-            opt.append("집계피처off")
-        if a.get("final_epoch"):
-            opt.append("final-epoch")
+        opt = [t for t, on in (("인코더분리", a.get("separate_encoder")),
+                               ("집계피처off", a.get("no_graph_features")),
+                               ("final-epoch", a.get("final_epoch"))) if on]
         rows.append({
-            "실행": name,
-            "라벨": lab,
-            "샘플": n,
-            "AUC": round(fm.get("auc", float("nan")), 4),
-            "ACC": round(fm.get("acc", float("nan")), 4),
-            "F1": round(fm.get("f1", float("nan")), 4),
+            "실행": name, "라벨": lab, "평가 방식": how, "평가 대상": scope,
+            "AUC": round(m.get("auc", float("nan")), 4),
+            "ACC": round(m.get("acc", float("nan")), 4),
+            "F1": round(m.get("f1", float("nan")), 4),
             "설정": f"{a.get('graph','')}/{a.get('conv','')} " + ",".join(opt),
         })
     df = pd.DataFrame(rows)
-    return df.sort_values(["라벨", "AUC"], ascending=[False, False]) if len(df) else df
+    if len(df):
+        df = df.sort_values(["라벨", "평가 방식", "AUC"], ascending=[False, True, False])
+    return df
 
 
 @st.cache_data
@@ -1074,6 +1105,9 @@ if dev_mode:
             # 그중 하나를 집으면 어느 것을 집느냐에 따라 결론이 흔들린다.
             vt2 = vt.copy()
             vt2["라벨키"] = vt2["라벨"].astype(str).str[:4]
+            # 평가 방식까지 같아야 비교가 된다. 홀드아웃(10%)과 교차검증(전체)은
+            # 채점 범위가 달라서 섞으면 안 된다.
+            vt2["설정"] = vt2["설정"] + " · " + vt2["평가 방식"]
             agg = vt2.groupby(["설정", "라벨키"]).agg(
                 AUC=("AUC", "mean"), ACC=("ACC", "mean"), F1=("F1", "mean"),
                 n=("실행", "count"),
