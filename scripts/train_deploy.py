@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -46,6 +47,9 @@ def run(cmd: list[str]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="배포용 단일 모델 학습")
+    ap.add_argument("--tag-suffix", default=None,
+                    help="실행 이름 뒤에 붙일 라벨 버전 (기본: 라벨 엑셀 파일명에서 뽑는다). "
+                         "calib<접미사> / deploy<접미사> 로 저장된다.")
     ap.add_argument("--recalibrate", action="store_true",
                     help="1단계(calib)를 다시 돌려 최적 epoch 와 보정 계수를 새로 구한다")
     ap.add_argument("--val-frac", type=float, default=0.15,
@@ -58,14 +62,24 @@ def main() -> int:
 
     py = sys.executable
     train_py = os.path.join(ROOT, "src", "train.py")
-    calib_dir = os.path.join(paths.RUNS_TRAIN, "calib")
+
+    # 라벨 버전을 이름에 박아둔다. 안 그러면 라벨을 갈아끼웠을 때 어느 라벨로 만든
+    # 모델인지 폴더만 보고는 알 수 없다.
+    suffix = a.tag_suffix
+    if suffix is None:
+        m = re.search(r"(\d{4})", os.path.basename(paths.LABEL_XLSX))
+        suffix = m.group(1) if m else ""
+    calib_tag, deploy_tag = f"calib{suffix}", f"deploy{suffix}"
+    print(f"실행 이름: {calib_tag} -> {deploy_tag}  (라벨 {os.path.basename(paths.LABEL_XLSX)})")
+
+    calib_dir = os.path.join(paths.RUNS_TRAIN, calib_tag)
     calib_json = os.path.join(calib_dir, "result.json")
 
     # ── 1단계 ────────────────────────────────────────────────
     if a.recalibrate or not os.path.isfile(calib_json):
         print("[1/3] 보정 실행 - 최적 epoch 와 확률 보정 계수를 구한다")
         run([py, train_py, *MODEL_ARGS, "--full",
-             "--val-frac", str(a.val_frac), "--holdout", str(a.holdout), "--tag", "calib"])
+             "--val-frac", str(a.val_frac), "--holdout", str(a.holdout), "--tag", calib_tag])
     else:
         print(f"[1/3] 보정 실행이 이미 있다 - 건너뛴다 ({calib_dir})")
 
@@ -79,12 +93,12 @@ def main() -> int:
     print(f"\n[2/3] 배포 모델 학습 - 전 데이터, {best_epoch} epoch, 검증셋 없음")
     run([py, train_py, *MODEL_ARGS, "--full",
          "--val-frac", "0", "--holdout", str(a.holdout), "--epochs", str(best_epoch),
-         "--platt-from", os.path.join(calib_dir, "full.pt"), "--tag", "deploy"])
+         "--platt-from", os.path.join(calib_dir, "full.pt"), "--tag", deploy_tag])
 
     # ── 3단계 ────────────────────────────────────────────────
     print("\n[3/3] 예측 캐시 생성")
     run([py, os.path.join(ROOT, "src", "predict_all.py"),
-         "--run", os.path.join(paths.RUNS_TRAIN, "deploy")])
+         "--run", os.path.join(paths.RUNS_TRAIN, deploy_tag)])
 
     print(f"\n완료. 배포 모델: {os.path.join(paths.RUNS_TRAIN, 'deploy')}")
     print("화면으로 보려면:  streamlit run src/app.py")

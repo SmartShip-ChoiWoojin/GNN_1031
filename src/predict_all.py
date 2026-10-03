@@ -3,7 +3,8 @@
 앱이 오분류 목록이나 집합별 일치율을 보여줄 때마다 수천 번 추론하면 느리다.
 배포 모델은 고정이므로 결과도 고정 - 배포 전에 한 번 계산해 같이 넣어둔다.
 
-    python src/predict_all.py --run runs/train/deploy
+    python src/predict_all.py                      # 현재 라벨의 배포본 자동 선택
+    python src/predict_all.py --run runs/train/deploy0918
 """
 
 from __future__ import annotations
@@ -27,11 +28,37 @@ from labels import load_label_table
 from meshrep import MeshRep
 
 
+def pick_deploy_run() -> str:
+    """현재 라벨로 학습된 배포본 폴더를 고른다 (보정용 calib* 은 제외).
+
+    실행 이름에 라벨 버전이 붙어 있어서(deploy0918 등) 고정된 이름을 쓸 수 없다.
+    """
+    import glob
+
+    cur = os.path.basename(paths.LABEL_XLSX)
+    for d in sorted(glob.glob(os.path.join(paths.RUNS_TRAIN, "*"))):
+        if os.path.basename(d).startswith("calib"):
+            continue
+        rj = os.path.join(d, "result.json")
+        if not (os.path.isfile(rj) and os.path.isfile(os.path.join(d, "full.pt"))):
+            continue
+        with open(rj, "r", encoding="utf-8") as fh:
+            if json.load(fh).get("label_xlsx") == cur:
+                return d
+    raise SystemExit(f"현재 라벨({cur})로 학습된 배포본을 찾지 못했습니다. "
+                     f"scripts/train_deploy.py 를 먼저 돌리세요.")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="배포 모델로 전 메쉬 예측 캐시 생성")
-    ap.add_argument("--run", default=os.path.join(paths.RUNS_TRAIN, "deploy"))
+    ap.add_argument("--run", default=None,
+                    help="대상 실행 폴더 (기본: 현재 라벨로 학습된 runs/train 의 배포본)")
     ap.add_argument("--cpu", action="store_true")
     a = ap.parse_args(argv)
+
+    if a.run is None:
+        a.run = pick_deploy_run()
+        print(f"[predict_all] 대상 실행 자동 선택: {a.run}")
 
     device = torch.device("cuda" if (torch.cuda.is_available() and not a.cpu) else "cpu")
 

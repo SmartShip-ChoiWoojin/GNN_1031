@@ -31,10 +31,28 @@ cv<라벨버전>_<무엇을 보려는 실험인지>_<조건>[_seed번호]
 
 ## train/ — 배포용
 
-| 폴더 | 내용 |
-|---|---|
-| `deploy` | **실제 배포 모델.** 학습대상 3223개 전부, 검증셋 없이 44 epoch. `predictions.csv` 포함 |
-| `calib` | 최적 epoch 와 확률 보정 계수를 구하려고 만든 중간 산출물. 배포본 아님 |
+이름은 `<역할><라벨버전>` 이다. 라벨 엑셀 파일명에서 버전을 뽑아 자동으로 붙는다.
+
+| 폴더 | 라벨 | 내용 |
+|---|---|---|
+| `deploy0918` | 0918 | **실제 배포 모델.** 학습 2900 / 평가 전용 323, 8 epoch. `predictions.csv` 포함 |
+| `calib0918` | 0918 | 최적 epoch 와 확률 보정 계수를 구하려고 만든 중간 산출물. 배포본 아님 |
+| `deploy0721` | 0721 | 라벨 버전 비교용. 같은 절차로 0721 라벨에서 만든 것 |
+| `calib0721` | 0721 | 위의 보정용 |
+
+`deploy` 와 `calib` 의 차이:
+
+| | `calib<버전>` | `deploy<버전>` |
+|---|---|---|
+| 목적 | **최적 epoch·보정 계수 알아내기** | **배포할 모델 만들기** |
+| 가중치 학습 | 학습분의 85% | **학습분 전부** |
+| 조기종료 검증 | 15% | 없음 (epoch 고정) |
+| epoch | 200까지 돌며 알아서 멈춤 | calib 이 알려준 값으로 고정 |
+| Platt 보정 | 검증분으로 직접 구함 | calib 것을 그대로 씀 |
+| 앱에 보이나 | 아니오 | **예** |
+
+평가 전용 홀드아웃은 둘 다 똑같이 뺀다. 안 그러면 calib 이 epoch 를 고를 때 평가
+데이터를 본 셈이 되어 점수가 부풀려진다.
 
 만드는 법: `python scripts/train_deploy.py` (두 단계를 자동으로 돈다)
 
@@ -119,7 +137,7 @@ seed 1 과 2 가 0.9652 / 0.9580 으로 크게 흔들린다. **seed 변동 폭 �
 ## 새 실행 만들기
 
 ```bash
-python scripts/train_deploy.py                      # 배포 모델 -> train/deploy
+python scripts/train_deploy.py                      # 배포 모델 -> train/deploy<버전>
 python scripts/run_validation.py --tag cv0918_base  # 성능 측정 -> validate/<tag>
 ```
 
