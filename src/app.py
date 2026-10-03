@@ -164,9 +164,21 @@ def split_samples(run_dir: str) -> tuple[list[str], list[str], list[str]]:
     paired = set(available_samples())
     hold = set(holdout_names(run_dir))
     tbl = load_label_table(paths.LABEL_XLSX)
+
+    # 5-fold 실행은 그 실행이 돌 때의 학습대상 명단(oof_names.txt)을 그대로 쓴다.
+    # 지금 라벨 엑셀로 다시 뽑으면 개수가 안 맞는다 - 0721 로 돌린 실행은 3214개인데
+    # 현재 엑셀(0918)로는 3223개가 나온다.
+    own = run_sample_names(run_dir)
+
     fit, ho, amb = [], [], []
     for r in tbl.itertuples():
         if r.name not in paired:
+            continue
+        if own is not None:
+            if r.name in own:
+                fit.append(r.name)
+            elif not r.trainable:
+                amb.append(r.name)
             continue
         if not r.trainable:
             amb.append(r.name)
@@ -175,6 +187,16 @@ def split_samples(run_dir: str) -> tuple[list[str], list[str], list[str]]:
         else:
             fit.append(r.name)
     return sorted(fit), sorted(ho), sorted(amb)
+
+
+@st.cache_data
+def run_sample_names(run_dir: str) -> set[str] | None:
+    """그 실행이 실제로 학습대상으로 삼았던 이름들. 교차검증 실행에만 있다."""
+    path = os.path.join(run_dir, "oof_names.txt")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as fh:
+        return set(fh.read().splitlines())
 
 
 @st.cache_data
@@ -312,11 +334,28 @@ def load_predictions(run_dir: str) -> pd.DataFrame:
     판정을 내놓는 문제가 있었다.
     """
     path = os.path.join(run_dir, "predictions.csv")
-    if not os.path.isfile(path):
-        return pd.DataFrame(
-            columns=["name", "cls", "ambig", "trainable", "prob", "pred", "kind", "conf"]
-        )
-    df = pd.read_csv(path)
+    if os.path.isfile(path):
+        df = pd.read_csv(path)
+    else:
+        # 5-fold 실행에는 predictions.csv 가 없다. 대신 oof.csv 가 있는데 이쪽이
+        # 오히려 정직하다 - 모든 메쉬가 '자기를 학습에 쓰지 않은 fold' 에게 채점받은
+        # 값이라, 10% 홀드아웃보다 평가 범위가 넓다.
+        oof_p = os.path.join(run_dir, "oof.csv")
+        names_p = os.path.join(run_dir, "oof_names.txt")
+        if not (os.path.isfile(oof_p) and os.path.isfile(names_p)):
+            return pd.DataFrame(
+                columns=["name", "cls", "ambig", "trainable", "prob", "pred", "kind", "conf"]
+            )
+        arr = np.loadtxt(oof_p, delimiter=",", skiprows=1)
+        with open(names_p, "r", encoding="utf-8") as fh:
+            nm = fh.read().splitlines()
+        df = pd.DataFrame({
+            "name": nm,
+            "cls": arr[:, 1].astype(int),
+            "prob": arr[:, 2],
+            "ambig": 0,
+            "trainable": 1,
+        })
     df["pred"] = (df["prob"] > 0.5).astype(int)
     df["kind"] = np.select(
         [(df["cls"] == 0) & (df["pred"] == 1), (df["cls"] == 1) & (df["pred"] == 0),
@@ -785,6 +824,19 @@ with st.sidebar:
     run_name = st.selectbox("모델 실행", choices, index=choices.index(default_run))
     run_dir = run_paths[run_name]
     if run_name.startswith("[검증]"):
+        _rm = load_run_metrics(run_dir)
+        _lab = (_rm or {}).get("label_xlsx")
+        if not _lab:
+            # 옛 실행에는 기록이 없다. 학습대상 개수로 되짚는다.
+            _lab = {3223: "fe model 1D index 0918.xlsx",
+                    3214: "fe model 1D index 0721.xlsx"}.get((_rm or {}).get("n_samples"))
+        _cur = os.path.basename(paths.LABEL_XLSX)
+        if _lab and _lab != _cur:
+            st.warning(
+                f"이 실행은 **{_lab}** 로 평가됐는데, 지금 화면의 라벨은 **{_cur}** 입니다. "
+                f"목록 옆 괄호와 '실제 라벨' 칸은 현재 엑셀 기준이라, 그 사이 분류가 바뀐 "
+                f"메쉬는 서로 다를 수 있습니다."
+            )
         st.error(
             "**검증용 실행입니다 - 배포본이 아닙니다.** 성능을 재려고 만든 fold 모델이라, "
             "메쉬마다 어느 fold 가 판정할지를 그때그때 계산합니다. 같은 메쉬라도 환경에 "
@@ -821,7 +873,11 @@ with st.sidebar:
     st.divider()
     st.subheader("파일 선택")
     fit_names, hold_names, amb_names = split_samples(run_dir)
-    SRC_FIT = f"학습에 쓴 메쉬 ({len(fit_names)}개)"
+    # 5-fold 실행에서는 학습대상 전체가 이미 정직하게 평가되어 있다(OOF). 배포 모델처럼
+    # "학습에 썼으니 못 믿는다"가 아니다 - 라벨 버전별 평가 결과를 볼 때 이 경로를 쓴다.
+    is_cv_run = not has_full_model(run_dir)
+    SRC_FIT = (f"학습대상 · 교차검증 평가 ({len(fit_names)}개)" if is_cv_run
+               else f"학습에 쓴 메쉬 ({len(fit_names)}개)")
     SRC_HOLD = f"평가 전용 홀드아웃 ({len(hold_names)}개)"
     SRC_AMB = f"애매·분류어려움 ({len(amb_names)}개)"
     SRC_ERR = "오분류·경계선 사례 (FP/FN)"
@@ -837,10 +893,20 @@ with st.sidebar:
 
     rep: MeshRep | None = None
     if source == SRC_FIT:
-        st.caption(
-            "모델이 **학습에 쓴** 메쉬입니다. 예측이 라벨과 잘 맞는 것은 당연하며, "
-            "이 화면의 값은 성능 근거가 되지 못합니다."
-        )
+        if is_cv_run:
+            st.caption(
+                "이 실행은 5-fold 교차검증이라 **모든 메쉬가 정직하게 평가**되어 있습니다. "
+                "각 메쉬를 학습에 쓰지 않은 fold 가 채점했습니다."
+            )
+            stat_df = load_predictions(run_dir)
+            if not stat_df.empty:
+                acc = float((stat_df["pred"] == stat_df["cls"]).mean())
+                st.caption(f"{len(stat_df)}개 기준 **일치율 {acc:.1%}**")
+        else:
+            st.caption(
+                "모델이 **학습에 쓴** 메쉬입니다. 예측이 라벨과 잘 맞는 것은 당연하며, "
+                "이 화면의 값은 성능 근거가 되지 못합니다."
+            )
         nm = pick_by_label(fit_names, "search_fit", "모델 이름")
         if nm:
             rep = parse_sample(nm)
