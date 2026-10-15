@@ -58,7 +58,18 @@ def main() -> int:
                     help="평가 전용으로 떼어 둘 비율. 두 단계 모두 같은 몫을 뺀다 - "
                          "보정 단계가 이 데이터를 보면 epoch 선택이 이미 평가 데이터에 "
                          "맞춰진 것이 된다. 0 이면 전부 학습한다.")
+    ap.add_argument("--names-from", default=None,
+                    help="학습대상을 이 파일의 이름들로 한정한다(한 줄에 하나). 두 단계에 "
+                         "똑같이 걸린다. 특정 메쉬를 학습에서 완전히 빼고 싶을 때 쓴다 - "
+                         "예: 그 메쉬들을 고친 결과를 나중에 '처음 보는 데이터'로 채점하려면 "
+                         "모델이 원본조차 본 적이 없어야 한다.")
     a = ap.parse_args()
+
+    # 두 단계에 공통으로 붙는 인자. 1단계와 2단계의 학습대상이 다르면 1단계가 고른
+    # epoch 가 2단계에 맞지 않는다.
+    common = ["--holdout", str(a.holdout)]
+    if a.names_from:
+        common += ["--names-from", a.names_from]
 
     py = sys.executable
     train_py = os.path.join(ROOT, "src", "train.py")
@@ -79,7 +90,7 @@ def main() -> int:
     if a.recalibrate or not os.path.isfile(calib_json):
         print("[1/3] 보정 실행 - 최적 epoch 와 확률 보정 계수를 구한다")
         run([py, train_py, *MODEL_ARGS, "--full",
-             "--val-frac", str(a.val_frac), "--holdout", str(a.holdout), "--tag", calib_tag])
+             "--val-frac", str(a.val_frac), *common, "--tag", calib_tag])
     else:
         print(f"[1/3] 보정 실행이 이미 있다 - 건너뛴다 ({calib_dir})")
 
@@ -92,7 +103,7 @@ def main() -> int:
     # ── 2단계 ────────────────────────────────────────────────
     print(f"\n[2/3] 배포 모델 학습 - 전 데이터, {best_epoch} epoch, 검증셋 없음")
     run([py, train_py, *MODEL_ARGS, "--full",
-         "--val-frac", "0", "--holdout", str(a.holdout), "--epochs", str(best_epoch),
+         "--val-frac", "0", *common, "--epochs", str(best_epoch),
          "--platt-from", os.path.join(calib_dir, "full.pt"), "--tag", deploy_tag])
 
     # ── 3단계 ────────────────────────────────────────────────
