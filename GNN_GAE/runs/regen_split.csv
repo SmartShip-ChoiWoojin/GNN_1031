@@ -1,0 +1,509 @@
+﻿name,split,cv_fold,group,kind,oracle
+SN2592_FWD_Clean_0006,train,2,0,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_0012,test,0,1,연결만 변경,재현됨
+SN2592_FWD_Clean_0014,train,2,153,절점삭제,재현됨
+SN2592_FWD_Clean_0018,train,3,2,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0021,train,4,3,절점삭제,재현됨
+SN2592_FWD_Clean_0024,train,1,4,절점삭제,재현됨
+SN2592_FWD_Clean_0025,train,5,5,연결만 변경,재현됨
+SN2592_FWD_Clean_0026,train,3,6,연결만 변경,재현됨
+SN2592_FWD_Clean_0029,train,5,7,연결만 변경,재현됨
+SN2592_FWD_Clean_0031,train,2,8,연결만 변경,재현됨
+SN2592_FWD_Clean_0032,train,5,9,절점삭제,재현됨
+SN2592_FWD_Clean_0034,train,4,10,절점삭제,연산 거부
+SN2592_FWD_Clean_0035,train,3,22,절점삭제,재현됨
+SN2592_FWD_Clean_0044,train,4,10,연결만 변경,재현됨
+SN2592_FWD_Clean_0047,train,2,11,연결만 변경,재현됨
+SN2592_FWD_Clean_0048,train,2,11,연결만 변경,재현됨
+SN2592_FWD_Clean_0050,train,5,119,절점삭제,재현됨
+SN2592_FWD_Clean_0052,train,1,12,절점삭제,재현됨
+SN2592_FWD_Clean_0053,train,4,13,연결만 변경,재현됨
+SN2592_FWD_Clean_0054,train,5,14,절점삭제,재현됨
+SN2592_FWD_Clean_0055,train,5,36,절점삭제,재현됨
+SN2592_FWD_Clean_0060,train,5,15,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0061,train,1,16,절점삭제,재현됨
+SN2592_FWD_Clean_0063,train,4,17,절점삭제,연산 거부
+SN2592_FWD_Clean_0064,train,2,18,절점삭제,재현됨
+SN2592_FWD_Clean_0069,train,3,168,절점삭제,재현됨
+SN2592_FWD_Clean_0072,train,4,19,절점삭제,재현됨
+SN2592_FWD_Clean_0074,train,1,223,절점삭제,재현됨
+SN2592_FWD_Clean_0075,train,4,20,절점삭제,재현됨
+SN2592_FWD_Clean_0077,train,3,177,절점삭제,재현됨
+SN2592_FWD_Clean_0080,train,5,132,절점삭제,재현됨
+SN2592_FWD_Clean_0085,train,3,21,절점삭제,재현됨
+SN2592_FWD_Clean_0088,train,3,22,연결만 변경,재현됨
+SN2592_FWD_Clean_0089,train,4,10,연결만 변경,재현됨
+SN2592_FWD_Clean_0093,test,0,23,절점삭제,재현됨
+SN2592_FWD_Clean_0094,train,5,24,연결만 변경,재현됨
+SN2592_FWD_Clean_0095,train,4,141,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_0096,train,3,168,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0097,test,0,25,연결만 변경,재현됨
+SN2592_FWD_Clean_0098,train,2,242,절점삭제,재현됨
+SN2592_FWD_Clean_0103,test,0,26,절점삭제,재현됨
+SN2592_FWD_Clean_0104,test,0,26,절점삭제,재현됨
+SN2592_FWD_Clean_0105,train,1,56,절점삭제,재현됨
+SN2592_FWD_Clean_0107,train,1,27,연결만 변경,재현됨
+SN2592_FWD_Clean_0108,train,2,28,절점삭제,재현됨
+SN2592_FWD_Clean_0110,train,1,29,연결만 변경,재현됨
+SN2592_FWD_Clean_0111,train,5,5,연결만 변경,재현됨
+SN2592_FWD_Clean_0113,test,0,30,연결만 변경,재현됨
+SN2592_FWD_Clean_0116,train,2,0,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_0117,train,4,31,절점삭제,재현됨
+SN2592_FWD_Clean_0119,train,1,32,연결만 변경,재현됨
+SN2592_FWD_Clean_0120,train,4,10,연결만 변경,재현됨
+SN2592_FWD_Clean_0121,train,1,33,절점삭제,재현됨
+SN2592_FWD_Clean_0127,train,5,132,절점삭제,재현됨
+SN2592_FWD_Clean_0128,train,4,34,절점삭제,재현됨
+SN2592_FWD_Clean_0130,train,4,35,절점삭제,재현됨
+SN2592_FWD_Clean_0131,train,3,249,변화없음,재현됨
+SN2592_FWD_Clean_0132,train,5,36,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_0134,train,5,36,연결만 변경,재현됨
+SN2592_FWD_Clean_0139,train,2,153,절점삭제,재현됨
+SN2592_FWD_Clean_0140,test,0,25,연결만 변경,재현됨
+SN2592_FWD_Clean_0142,test,0,37,절점삭제,재현됨
+SN2592_FWD_Clean_0146,train,3,38,연결만 변경,재현됨
+SN2592_FWD_Clean_0148,train,1,39,절점삭제,재현됨
+SN2592_FWD_Clean_0149,train,5,40,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0154,train,4,41,연결만 변경,재현됨
+SN2592_FWD_Clean_0155,train,1,42,연결만 변경,재현됨
+SN2592_FWD_Clean_0156,train,2,43,절점삭제,재현됨
+SN2592_FWD_Clean_0159,train,4,44,연결만 변경,재현됨
+SN2592_FWD_Clean_0160,train,5,45,절점삭제,재현됨
+SN2592_FWD_Clean_0162,train,4,46,절점삭제,재현됨
+SN2592_FWD_Clean_0164,test,0,57,연결만 변경,재현됨
+SN2592_FWD_Clean_0166,train,4,47,절점삭제,순수 삭제
+SN2592_FWD_Clean_0171,train,3,22,연결만 변경,재현됨
+SN2592_FWD_Clean_0178,train,1,48,연결만 변경,재현됨
+SN2592_FWD_Clean_0180,train,3,22,연결만 변경,재현됨
+SN2592_FWD_Clean_0182,train,1,16,절점삭제,재현됨
+SN2592_FWD_Clean_0184,train,4,49,절점삭제,재현됨
+SN2592_FWD_Clean_0185,train,1,50,절점삭제,재현됨
+SN2592_FWD_Clean_0187,train,5,51,절점삭제,순수 삭제
+SN2592_FWD_Clean_0188,train,2,52,절점삭제,재현됨
+SN2592_FWD_Clean_0199,test,0,37,절점삭제,재현됨
+SN2592_FWD_Clean_0202,test,0,53,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0206,train,1,223,절점삭제,재현됨
+SN2592_FWD_Clean_0209,train,4,54,절점삭제,재현됨
+SN2592_FWD_Clean_0214,train,4,55,연결만 변경,재현됨
+SN2592_FWD_Clean_0216,train,2,104,연결만 변경,재현됨
+SN2592_FWD_Clean_0218,train,1,56,절점삭제,재현됨
+SN2592_FWD_Clean_0220,test,0,57,연결만 변경,재현됨
+SN2592_FWD_Clean_0222,train,5,132,절점삭제,재현됨
+SN2592_FWD_Clean_0225,train,2,104,연결만 변경,재현됨
+SN2592_FWD_Clean_0226,test,0,26,절점삭제,1D 불일치
+SN2592_FWD_Clean_0227,train,4,10,절점삭제,순수 삭제
+SN2592_FWD_Clean_0229,train,2,18,절점삭제,재현됨
+SN2592_FWD_Clean_0231,train,4,58,절점삭제,재현됨
+SN2592_FWD_Clean_0232,train,2,179,절점삭제,1D 불일치
+SN2592_FWD_Clean_0235,train,1,59,절점삭제,재현됨
+SN2592_FWD_Clean_0237,train,3,60,연결만 변경,재현됨
+SN2592_FWD_Clean_0239,train,1,61,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0241,test,0,57,연결만 변경,재현됨
+SN2592_FWD_Clean_0244,train,1,62,연결만 변경,재현됨
+SN2592_FWD_Clean_0245,train,3,63,절점삭제,재현됨
+SN2592_FWD_Clean_0248,train,1,12,절점삭제,재현됨
+SN2592_FWD_Clean_0249,train,2,97,절점삭제,재현됨
+SN2592_FWD_Clean_0252,train,1,64,연결만 변경,재현됨
+SN2592_FWD_Clean_0256,test,0,37,절점삭제,재현됨
+SN2592_FWD_Clean_0258,train,2,65,절점삭제,재현됨
+SN2592_FWD_Clean_0260,train,5,36,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_0262,train,5,45,절점삭제,재현됨
+SN2592_FWD_Clean_0266,train,2,66,절점삭제,재현됨
+SN2592_FWD_Clean_0267,train,3,251,좌표이동 (연결 변화 없음),좌표 이동
+SN2592_FWD_Clean_0268,train,1,67,절점삭제,재현됨
+SN2592_FWD_Clean_0269,test,0,26,연결만 변경,재현됨
+SN2592_FWD_Clean_0272,train,4,17,절점삭제,재현됨
+SN2592_FWD_Clean_0274,train,3,68,절점삭제,재현됨
+SN2592_FWD_Clean_0276,train,5,69,연결만 변경,재현됨
+SN2592_FWD_Clean_0278,train,5,36,절점삭제,재현됨
+SN2592_FWD_Clean_0279,train,2,104,연결만 변경,재현됨
+SN2592_FWD_Clean_0283,train,3,70,절점삭제,재현됨
+SN2592_FWD_Clean_0284,train,2,137,변화없음,재현됨
+SN2592_FWD_Clean_0286,train,2,92,절점삭제,1D 불일치
+SN2592_FWD_Clean_0288,train,3,71,절점삭제,재현됨
+SN2592_FWD_Clean_0289,train,5,72,절점삭제,재현됨
+SN2592_FWD_Clean_0291,test,0,57,연결만 변경,재현됨
+SN2592_FWD_Clean_0292,train,5,73,절점삭제,재현됨
+SN2592_FWD_Clean_0295,train,2,74,절점삭제,재현됨
+SN2592_FWD_Clean_0297,train,3,168,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0298,train,3,75,절점삭제,재현됨
+SN2592_FWD_Clean_0303,test,0,26,절점삭제,재현됨
+SN2592_FWD_Clean_0305,test,0,37,절점삭제,재현됨
+SN2592_FWD_Clean_0306,train,4,76,절점삭제,재현됨
+SN2592_FWD_Clean_0315,train,3,188,절점삭제,재현됨
+SN2592_FWD_Clean_0316,train,5,77,연결만 변경,재현됨
+SN2592_FWD_Clean_0317,train,1,78,절점삭제,재현됨
+SN2592_FWD_Clean_0318,train,3,79,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_0319,train,2,74,절점삭제,재현됨
+SN2592_FWD_Clean_0322,train,1,80,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0323,train,2,81,절점삭제,재현됨
+SN2592_FWD_Clean_0327,test,0,30,절점삭제,재현됨
+SN2592_FWD_Clean_0329,train,5,164,좌표이동,좌표 이동
+SN2592_FWD_Clean_0337,train,5,82,절점삭제,재현됨
+SN2592_FWD_Clean_0339,train,1,207,절점삭제,재현됨
+SN2592_FWD_Clean_0340,train,1,56,절점삭제,재현됨
+SN2592_FWD_Clean_0341,train,1,78,절점삭제,재현됨
+SN2592_FWD_Clean_0346,train,2,83,절점삭제,재현됨
+SN2592_FWD_Clean_0347,train,2,84,절점삭제,재현됨
+SN2592_FWD_Clean_0348,train,3,85,절점삭제,재현됨
+SN2592_FWD_Clean_0349,train,3,86,절점삭제,재현됨
+SN2592_FWD_Clean_0351,train,3,87,절점삭제,재현됨
+SN2592_FWD_Clean_0357,train,2,43,절점삭제,재현됨
+SN2592_FWD_Clean_0358,train,5,45,절점삭제,재현됨
+SN2592_FWD_Clean_0360,train,4,3,절점삭제,재현됨
+SN2592_FWD_Clean_0369,test,0,88,연결만 변경,재현됨
+SN2592_FWD_Clean_0371,train,4,89,연결만 변경,재현됨
+SN2592_FWD_Clean_0374,train,5,90,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_0378,train,5,91,절점삭제,재현됨
+SN2592_FWD_Clean_0381,train,2,92,연결만 변경,재현됨
+SN2592_FWD_Clean_0387,train,5,69,연결만 변경,재현됨
+SN2592_FWD_Clean_0389,train,5,164,절점삭제,재현됨
+SN2592_FWD_Clean_0390,train,3,93,절점삭제,재현됨
+SN2592_FWD_Clean_0392,train,5,94,절점삭제,재현됨
+SN2592_FWD_Clean_0393,train,1,95,절점삭제,재현됨
+SN2592_FWD_Clean_0397,train,5,96,절점삭제,재현됨
+SN2592_FWD_Clean_0400,train,2,97,연결만 변경,재현됨
+SN2592_FWD_Clean_1006,train,2,97,연결만 변경,재현됨
+SN2592_FWD_Clean_1007,train,1,98,연결만 변경,재현됨
+SN2592_FWD_Clean_1011,train,2,99,연결만 변경,재현됨
+SN2592_FWD_Clean_1013,train,3,93,연결만 변경,재현됨
+SN2592_FWD_Clean_1014,train,3,2,연결만 변경,재현됨
+SN2592_FWD_Clean_1016,train,4,100,절점삭제,순수 삭제
+SN2592_FWD_Clean_1017,train,4,101,절점삭제,재현됨
+SN2592_FWD_Clean_1023,test,0,102,절점삭제,재현됨
+SN2592_FWD_Clean_1025,train,4,103,연결만 변경,재현됨
+SN2592_FWD_Clean_1026,train,1,62,절점추가,절점 추가
+SN2592_FWD_Clean_1028,train,2,92,절점삭제,재현됨
+SN2592_FWD_Clean_1031,train,2,104,절점추가,절점 추가
+SN2592_FWD_Clean_1033,train,3,105,연결만 변경,재현됨
+SN2592_FWD_Clean_1035,train,3,85,절점삭제,재현됨
+SN2592_FWD_Clean_1036,train,1,67,절점삭제,재현됨
+SN2592_FWD_Clean_1040,train,2,106,절점삭제,재현됨
+SN2592_FWD_Clean_1041,train,3,107,연결만 변경,재현됨
+SN2592_FWD_Clean_1042,train,5,108,절점삭제,재현됨
+SN2592_FWD_Clean_1045,train,4,109,연결만 변경,재현됨
+SN2592_FWD_Clean_1047,train,4,34,연결만 변경,재현됨
+SN2592_FWD_Clean_1052,train,4,10,절점삭제,재현됨
+SN2592_FWD_Clean_1053,train,2,110,연결만 변경,재현됨
+SN2592_FWD_Clean_1055,train,2,111,연결만 변경,재현됨
+SN2592_FWD_Clean_1058,train,5,112,연결만 변경,재현됨
+SN2592_FWD_Clean_1059,train,4,58,절점삭제 + 좌표이동,좌표 이동
+SN2592_FWD_Clean_1060,train,5,72,절점삭제,재현됨
+SN2592_FWD_Clean_1062,test,0,113,좌표이동,좌표 이동
+SN2592_FWD_Clean_1064,train,2,114,연결만 변경,재현됨
+SN2592_FWD_Clean_1065,train,5,5,연결만 변경,재현됨
+SN2592_FWD_Clean_1066,train,4,10,연결만 변경,재현됨
+SN2592_FWD_Clean_1067,train,3,115,연결만 변경,재현됨
+SN2592_FWD_Clean_1069,train,4,100,절점삭제,재현됨
+SN2592_FWD_Clean_1070,train,3,38,연결만 변경,재현됨
+SN2592_FWD_Clean_1072,train,2,104,연결만 변경,재현됨
+SN2592_FWD_Clean_1073,test,0,218,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_1077,train,3,188,절점삭제,재현됨
+SN2592_FWD_Clean_1079,train,1,116,연결만 변경,재현됨
+SN2592_FWD_Clean_1080,test,0,57,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_1081,train,2,84,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_1083,test,0,117,절점삭제,재현됨
+SN2592_FWD_Clean_1088,train,1,16,절점삭제,재현됨
+SN2592_FWD_Clean_1091,train,2,43,절점삭제,재현됨
+SN2592_FWD_Clean_1098,train,2,65,절점삭제 + 절점추가 + 좌표이동,신규 절점으로 교체
+SN2592_FWD_Clean_1106,train,4,118,절점삭제,재현됨
+SN2592_FWD_Clean_1109,train,5,119,연결만 변경,재현됨
+SN2592_FWD_Clean_1116,train,2,120,연결만 변경,재현됨
+SN2592_FWD_Clean_1121,train,1,16,연결만 변경,재현됨
+SN2592_FWD_Clean_1133,train,2,121,절점삭제,재현됨
+SN2592_FWD_Clean_1136,train,5,122,연결만 변경,재현됨
+SN2592_FWD_Clean_1137,train,1,123,절점삭제,재현됨
+SN2592_FWD_Clean_1138,train,3,168,절점삭제,재현됨
+SN2592_FWD_Clean_1139,train,2,8,연결만 변경,재현됨
+SN2592_FWD_Clean_1150,train,5,124,연결만 변경,재현됨
+SN2592_FWD_Clean_1152,train,4,20,연결만 변경,재현됨
+SN2592_FWD_Clean_1153,train,4,125,연결만 변경,재현됨
+SN2592_FWD_Clean_1154,train,3,105,연결만 변경,재현됨
+SN2592_FWD_Clean_1155,train,2,126,연결만 변경,재현됨
+SN2592_FWD_Clean_1157,test,0,53,절점삭제,재현됨
+SN2592_FWD_Clean_1158,train,2,83,절점삭제,재현됨
+SN2592_FWD_Clean_1161,train,5,127,연결만 변경,재현됨
+SN2592_FWD_Clean_1162,train,2,126,연결만 변경,재현됨
+SN2592_FWD_Clean_1170,train,1,128,연결만 변경,재현됨
+SN2592_FWD_Clean_1175,test,0,129,연결만 변경,재현됨
+SN2592_FWD_Clean_1182,train,2,65,연결만 변경,재현됨
+SN2592_FWD_Clean_1184,train,2,43,연결만 변경,재현됨
+SN2592_FWD_Clean_1185,train,2,65,절점삭제,재현됨
+SN2592_FWD_Clean_2002,train,4,89,연결만 변경,재현됨
+SN2592_FWD_Clean_2003,train,4,10,절점삭제,재현됨
+SN2592_FWD_Clean_2005,train,1,130,절점삭제,연산 거부
+SN2592_FWD_Clean_2006,train,2,131,절점삭제,순수 삭제
+SN2592_FWD_Clean_2008,train,5,164,절점삭제,재현됨
+SN2592_FWD_Clean_2010,train,5,132,절점삭제,1D 불일치
+SN2592_FWD_Clean_2011,train,5,14,절점추가,절점 추가
+SN2592_FWD_Clean_2012,train,4,34,절점삭제,1D 불일치
+SN2592_FWD_Clean_2013,train,3,133,연결만 변경,재현됨
+SN2592_FWD_Clean_2014,train,2,104,절점추가,절점 추가
+SN2592_FWD_Clean_2015,test,0,134,연결만 변경,1D 불일치
+SN2592_FWD_Clean_2016,train,3,85,절점삭제,재현됨
+SN2592_FWD_Clean_2020,train,3,135,절점삭제,연산 거부
+SN2592_FWD_Clean_2021,train,2,97,절점삭제,재현됨
+SN2592_FWD_Clean_2028,train,3,136,절점삭제,재현됨
+SN2592_FWD_Clean_2029,train,2,137,연결만 변경,재현됨
+SN2592_FWD_Clean_2033,train,5,51,절점삭제,순수 삭제
+SN2592_FWD_Clean_2035,train,4,100,절점삭제,재현됨
+SN2592_FWD_Clean_2041,test,0,138,절점삭제,재현됨
+SN2592_FWD_Clean_2043,train,2,52,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_2045,train,5,122,연결만 변경,재현됨
+SN2592_FWD_Clean_2046,train,5,139,절점삭제,재현됨
+SN2592_FWD_Clean_2047,train,1,27,연결만 변경,재현됨
+SN2592_FWD_Clean_2049,train,2,92,절점삭제,재현됨
+SN2592_FWD_Clean_2050,train,4,118,절점삭제,재현됨
+SN2592_FWD_Clean_2052,train,3,188,좌표이동,좌표 이동
+SN2592_FWD_Clean_2056,train,4,109,연결만 변경,재현됨
+SN2592_FWD_Clean_2059,train,3,140,절점삭제,순수 삭제
+SN2592_FWD_Clean_2061,train,4,141,절점삭제,1D 불일치
+SN2592_FWD_Clean_2065,train,1,27,연결만 변경,재현됨
+SN2592_FWD_Clean_2066,train,4,141,연결만 변경,재현됨
+SN2592_FWD_Clean_2067,train,1,142,절점삭제,재현됨
+SN2592_FWD_Clean_2068,train,4,143,연결만 변경,재현됨
+SN2592_FWD_Clean_2070,train,3,144,절점삭제 + 좌표이동,좌표 이동
+SN2592_FWD_Clean_2077,test,0,145,절점삭제,재현됨
+SN2592_FWD_Clean_2078,train,4,146,연결만 변경,재현됨
+SN2592_FWD_Clean_2080,train,5,112,연결만 변경,재현됨
+SN2592_FWD_Clean_2083,train,4,55,연결만 변경,재현됨
+SN2592_FWD_Clean_2085,train,4,20,연결만 변경,재현됨
+SN2592_FWD_Clean_2087,train,1,147,연결만 변경,재현됨
+SN2592_FWD_Clean_2088,train,5,208,절점삭제,재현됨
+SN2592_FWD_Clean_2094,train,4,148,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2098,train,5,149,절점삭제,재현됨
+SN2592_FWD_Clean_2103,train,1,150,연결만 변경,재현됨
+SN2592_FWD_Clean_2105,train,1,42,연결만 변경,재현됨
+SN2592_FWD_Clean_2106,train,4,55,연결만 변경,재현됨
+SN2592_FWD_Clean_2109,train,4,55,연결만 변경,재현됨
+SN2592_FWD_Clean_2111,train,3,253,절점삭제,순수 삭제
+SN2592_FWD_Clean_2113,train,3,151,연결만 변경,재현됨
+SN2592_FWD_Clean_2114,train,2,186,절점삭제,1D 불일치
+SN2592_FWD_Clean_2115,train,5,152,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2116,train,2,153,연결만 변경,재현됨
+SN2592_FWD_Clean_2117,train,2,104,연결만 변경,재현됨
+SN2592_FWD_Clean_2118,train,3,188,절점삭제,재현됨
+SN2592_FWD_Clean_2120,train,1,154,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2121,train,2,155,연결만 변경,재현됨
+SN2592_FWD_Clean_2122,train,3,2,절점삭제,재현됨
+SN2592_FWD_Clean_2123,train,5,45,절점삭제,재현됨
+SN2592_FWD_Clean_2126,test,0,26,연결만 변경,재현됨
+SN2592_FWD_Clean_2127,train,3,157,절점삭제,재현됨
+SN2592_FWD_Clean_2128,train,3,151,연결만 변경,재현됨
+SN2592_FWD_Clean_2132,train,3,156,연결만 변경,재현됨
+SN2592_FWD_Clean_2134,train,3,157,절점삭제,1D 불일치
+SN2592_FWD_Clean_2136,train,4,158,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2140,train,1,159,절점삭제,재현됨
+SN2592_FWD_Clean_2141,train,5,160,연결만 변경,재현됨
+SN2592_FWD_Clean_2142,train,1,161,절점삭제,재현됨
+SN2592_FWD_Clean_2144,train,4,55,절점삭제,순수 삭제
+SN2592_FWD_Clean_2145,test,0,145,절점삭제,재현됨
+SN2592_FWD_Clean_2147,train,5,127,연결만 변경,재현됨
+SN2592_FWD_Clean_2148,test,0,37,절점삭제,재현됨
+SN2592_FWD_Clean_2150,train,3,107,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_2156,train,1,247,연결만 변경,재현됨
+SN2592_FWD_Clean_2158,train,4,10,연결만 변경,재현됨
+SN2592_FWD_Clean_2159,train,3,162,절점삭제 + 좌표이동,좌표 이동
+SN2592_FWD_Clean_2160,train,1,163,연결만 변경,재현됨
+SN2592_FWD_Clean_2163,train,3,70,절점삭제,재현됨
+SN2592_FWD_Clean_2165,train,3,177,절점삭제,재현됨
+SN2592_FWD_Clean_2169,train,4,47,좌표이동,좌표 이동
+SN2592_FWD_Clean_2170,train,5,164,절점삭제,재현됨
+SN2592_FWD_Clean_2176,train,4,17,절점삭제,재현됨
+SN2592_FWD_Clean_2177,train,1,29,연결만 변경,재현됨
+SN2592_FWD_Clean_2178,train,2,165,절점삭제,1D 불일치
+SN2592_FWD_Clean_2179,train,3,22,연결만 변경,재현됨
+SN2592_FWD_Clean_2180,train,3,166,연결만 변경,재현됨
+SN2592_FWD_Clean_2182,train,4,118,절점삭제,재현됨
+SN2592_FWD_Clean_2187,train,3,167,연결만 변경,재현됨
+SN2592_FWD_Clean_2188,train,2,92,절점삭제,재현됨
+SN2592_FWD_Clean_2189,train,3,168,연결만 변경,재현됨
+SN2592_FWD_Clean_2190,train,4,169,절점삭제,재현됨
+SN2592_FWD_Clean_2191,train,4,170,절점삭제,재현됨
+SN2592_FWD_Clean_2192,train,5,171,연결만 변경,재현됨
+SN2592_FWD_Clean_2201,train,1,172,연결만 변경,재현됨
+SN2592_FWD_Clean_2208,train,5,173,연결만 변경,재현됨
+SN2592_FWD_Clean_2210,train,5,174,연결만 변경,재현됨
+SN2592_FWD_Clean_2212,train,1,154,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2213,train,5,36,절점추가,절점 추가
+SN2592_FWD_Clean_2215,train,4,13,연결만 변경,재현됨
+SN2592_FWD_Clean_2217,train,2,175,연결만 변경,재현됨
+SN2592_FWD_Clean_2218,train,5,176,절점삭제,재현됨
+SN2592_FWD_Clean_2221,train,3,115,좌표이동,좌표 이동
+SN2592_FWD_Clean_2226,train,5,45,절점삭제,재현됨
+SN2592_FWD_Clean_2227,train,3,177,절점삭제,1D 불일치
+SN2592_FWD_Clean_2228,train,3,107,연결만 변경,재현됨
+SN2592_FWD_Clean_2229,train,2,178,절점삭제,재현됨
+SN2592_FWD_Clean_2235,train,2,179,연결만 변경,재현됨
+SN2592_FWD_Clean_2237,train,4,180,절점삭제,재현됨
+SN2592_FWD_Clean_2244,train,5,193,연결만 변경,재현됨
+SN2592_FWD_Clean_2246,train,3,63,절점삭제,1D 불일치
+SN2592_FWD_Clean_2247,train,2,181,절점삭제,재현됨
+SN2592_FWD_Clean_2249,train,5,182,연결만 변경,재현됨
+SN2592_FWD_Clean_2250,train,5,183,절점삭제,순수 삭제
+SN2592_FWD_Clean_2251,train,5,173,연결만 변경,재현됨
+SN2592_FWD_Clean_2252,train,1,184,연결만 변경,재현됨
+SN2592_FWD_Clean_2256,train,4,76,절점삭제,재현됨
+SN2592_FWD_Clean_2257,train,4,185,연결만 변경,재현됨
+SN2592_FWD_Clean_2263,train,1,147,연결만 변경,재현됨
+SN2592_FWD_Clean_2264,train,2,186,절점삭제,연산 거부
+SN2592_FWD_Clean_2266,train,3,187,연결만 변경,재현됨
+SN2592_FWD_Clean_2267,train,2,83,절점삭제,1D 불일치
+SN2592_FWD_Clean_2268,train,3,188,절점삭제,재현됨
+SN2592_FWD_Clean_2271,train,4,189,연결만 변경,재현됨
+SN2592_FWD_Clean_2273,train,1,147,연결만 변경,재현됨
+SN2592_FWD_Clean_2278,train,1,147,연결만 변경,재현됨
+SN2592_FWD_Clean_2280,train,4,190,절점삭제,재현됨
+SN2592_FWD_Clean_2283,train,4,58,절점삭제 + 좌표이동,좌표 이동
+SN2592_FWD_Clean_2285,train,2,111,연결만 변경,재현됨
+SN2592_FWD_Clean_2290,train,2,191,절점삭제,재현됨
+SN2592_FWD_Clean_2293,train,5,192,절점삭제,재현됨
+SN2592_FWD_Clean_2294,train,5,193,연결만 변경,재현됨
+SN2592_FWD_Clean_2298,train,4,194,연결만 변경,재현됨
+SN2592_FWD_Clean_2301,train,3,22,연결만 변경,재현됨
+SN2592_FWD_Clean_2303,train,5,69,연결만 변경,재현됨
+SN2592_FWD_Clean_2305,train,1,116,연결만 변경,재현됨
+SN2592_FWD_Clean_2306,train,2,195,연결만 변경,재현됨
+SN2592_FWD_Clean_2308,train,4,169,절점삭제,재현됨
+SN2592_FWD_Clean_2310,test,0,134,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_2313,train,5,132,절점삭제,1D 불일치
+SN2592_FWD_Clean_2314,train,4,10,절점삭제,재현됨
+SN2592_FWD_Clean_2315,train,3,133,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2316,train,3,166,연결만 변경,재현됨
+SN2592_FWD_Clean_2317,train,4,118,절점삭제,재현됨
+SN2592_FWD_Clean_2318,train,3,196,절점삭제,재현됨
+SN2592_FWD_Clean_2322,train,4,35,절점삭제,재현됨
+SN2592_FWD_Clean_2323,test,0,197,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2324,train,2,104,연결만 변경,재현됨
+SN2592_FWD_Clean_2327,train,4,198,연결만 변경,재현됨
+SN2592_FWD_Clean_2331,test,0,199,절점삭제,재현됨
+SN2592_FWD_Clean_2333,train,1,150,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2334,train,5,127,연결만 변경,재현됨
+SN2592_FWD_Clean_2337,train,1,200,절점삭제,재현됨
+SN2592_FWD_Clean_2339,test,0,57,절점삭제,재현됨
+SN2592_FWD_Clean_2342,test,0,102,절점삭제,재현됨
+SN2592_FWD_Clean_2343,train,4,201,절점삭제,1D 불일치
+SN2592_FWD_Clean_2344,train,3,85,절점삭제,재현됨
+SN2592_FWD_Clean_2347,train,1,78,절점삭제,재현됨
+SN2592_FWD_Clean_2349,train,5,208,절점삭제,재현됨
+SN2592_FWD_Clean_2350,test,0,202,절점삭제,재현됨
+SN2592_FWD_Clean_2352,train,5,203,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_2354,train,4,143,연결만 변경,재현됨
+SN2592_FWD_Clean_2356,train,3,204,절점삭제,재현됨
+SN2592_FWD_Clean_2357,test,0,117,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_2359,train,3,205,연결만 변경,재현됨
+SN2592_FWD_Clean_2362,test,0,26,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_2365,train,5,94,절점삭제,재현됨
+SN2592_FWD_Clean_2369,train,5,9,절점삭제,1D 불일치
+SN2592_FWD_Clean_2370,train,3,157,절점삭제,1D 불일치
+SN2592_FWD_Clean_2371,train,5,206,연결만 변경,재현됨
+SN2592_FWD_Clean_2372,train,1,207,절점삭제,재현됨
+SN2592_FWD_Clean_2376,train,2,178,절점삭제,재현됨
+SN2592_FWD_Clean_2378,train,2,114,좌표이동,좌표 이동
+SN2592_FWD_Clean_2384,train,5,176,절점삭제,재현됨
+SN2592_FWD_Clean_3001,train,5,208,절점삭제,재현됨
+SN2592_FWD_Clean_3002,train,1,209,절점삭제,1D 불일치
+SN2592_FWD_Clean_3005,train,3,22,연결만 변경,재현됨
+SN2592_FWD_Clean_3006,train,3,210,절점삭제,재현됨
+SN2592_FWD_Clean_3010,train,5,211,절점삭제,재현됨
+SN2592_FWD_Clean_3011,train,5,127,연결만 변경,재현됨
+SN2592_FWD_Clean_3012,train,1,212,연결만 변경,재현됨
+SN2592_FWD_Clean_3014,train,5,183,절점삭제,순수 삭제
+SN2592_FWD_Clean_3016,train,1,213,연결만 변경,재현됨
+SN2592_FWD_Clean_3017,train,4,118,절점추가,절점 추가
+SN2592_FWD_Clean_3019,train,1,247,연결만 변경,재현됨
+SN2592_FWD_Clean_3022,train,3,151,절점삭제,재현됨
+SN2592_FWD_Clean_3024,train,3,253,절점삭제,순수 삭제
+SN2592_FWD_Clean_3026,train,1,214,절점삭제,연산 거부
+SN2592_FWD_Clean_3028,train,5,69,연결만 변경,재현됨
+SN2592_FWD_Clean_3030,train,1,16,절점삭제,재현됨
+SN2592_FWD_Clean_3038,train,1,78,절점삭제,재현됨
+SN2592_FWD_Clean_3040,test,0,215,연결만 변경,재현됨
+SN2592_FWD_Clean_3041,train,1,62,연결만 변경,재현됨
+SN2592_FWD_Clean_3042,train,1,216,절점삭제 + 절점추가,신규 절점으로 교체
+SN2592_FWD_Clean_3043,test,0,26,연결만 변경,재현됨
+SN2592_FWD_Clean_3046,train,4,217,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_3048,train,2,92,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_3049,test,0,218,절점삭제,연산 거부
+SN2592_FWD_Clean_3053,train,1,29,연결만 변경,재현됨
+SN2592_FWD_Clean_3055,train,5,219,절점추가,절점 추가
+SN2592_FWD_Clean_3056,train,1,59,절점삭제,연산 거부
+SN2592_FWD_Clean_3058,train,4,220,절점추가,절점 추가
+SN2592_FWD_Clean_3063,train,1,221,절점삭제,재현됨
+SN2592_FWD_Clean_3067,train,5,222,변화없음,재현됨
+SN2592_FWD_Clean_3071,train,5,119,연결만 변경,재현됨
+SN2592_FWD_Clean_3072,train,1,223,절점추가,절점 추가
+SN2592_FWD_Clean_3076,train,1,224,변화없음,재현됨
+SN2592_FWD_Clean_3077,train,3,225,연결만 변경,재현됨
+SN2592_FWD_Clean_3078,train,1,207,절점삭제,재현됨
+SN2592_FWD_Clean_3079,train,4,169,절점삭제,재현됨
+SN2592_FWD_Clean_3082,train,4,226,연결만 변경,재현됨
+SN2592_FWD_Clean_3085,train,2,153,절점삭제,재현됨
+SN2592_FWD_Clean_3087,train,3,227,절점삭제,재현됨
+SN2592_FWD_Clean_3092,train,4,228,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3095,train,1,229,절점추가,절점 추가
+SN2592_FWD_Clean_3097,test,0,26,연결만 변경,재현됨
+SN2592_FWD_Clean_3100,train,2,230,연결만 변경,재현됨
+SN2592_FWD_Clean_3105,train,1,16,절점삭제,재현됨
+SN2592_FWD_Clean_3115,test,0,57,절점삭제,재현됨
+SN2592_FWD_Clean_3119,train,4,231,절점삭제,재현됨
+SN2592_FWD_Clean_3122,test,0,102,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3127,train,2,84,절점삭제,재현됨
+SN2592_FWD_Clean_3137,train,1,50,절점삭제,재현됨
+SN2592_FWD_Clean_3138,test,0,232,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3141,train,4,233,연결만 변경,재현됨
+SN2592_FWD_Clean_3142,train,3,177,절점삭제,재현됨
+SN2592_FWD_Clean_3143,train,2,234,연결만 변경,재현됨
+SN2592_FWD_Clean_3144,train,2,235,연결만 변경,재현됨
+SN2592_FWD_Clean_3150,test,0,236,연결만 변경,재현됨
+SN2592_FWD_Clean_3156,train,1,237,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3157,train,5,238,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3158,train,4,239,절점삭제 + 절점추가,신규 절점으로 교체
+SN2592_FWD_Clean_3165,train,3,60,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_3169,train,2,83,절점삭제,재현됨
+SN2592_FWD_Clean_3171,train,2,240,절점삭제,재현됨
+SN2592_FWD_Clean_3172,train,4,228,절점삭제 + 절점추가,신규 절점으로 교체
+SN2592_FWD_Clean_3173,train,1,241,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_3176,train,2,242,절점삭제,재현됨
+SN2592_FWD_Clean_3177,train,3,243,절점삭제,재현됨
+SN2592_FWD_Clean_3180,train,1,123,절점삭제,재현됨
+SN2592_FWD_Clean_3182,train,5,132,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3184,train,5,164,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_3187,train,3,227,절점삭제,재현됨
+SN2592_FWD_Clean_3190,test,0,244,연결만 변경,재현됨
+SN2592_FWD_Clean_3191,train,2,245,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_3192,train,1,56,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_3194,train,5,132,절점삭제 + 절점추가,신규 절점으로 교체
+SN2592_FWD_Clean_3198,train,1,154,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_3199,train,1,16,절점삭제,재현됨
+SN2592_FWD_Clean_3201,train,1,62,연결만 변경,재현됨
+SN2592_FWD_Clean_3204,train,2,246,절점삭제,재현됨
+SN2592_FWD_Clean_3206,train,1,247,절점삭제,재현됨
+SN2592_FWD_Clean_3210,train,2,153,절점삭제,재현됨
+SN2592_FWD_Clean_3211,train,3,248,연결만 변경,재현됨
+SN2592_FWD_Clean_3212,train,3,135,절점삭제,재현됨
+SN2592_FWD_Clean_3217,train,3,151,연결만 변경,재현됨
+SN2592_FWD_Clean_3220,train,1,163,연결만 변경,재현됨
+SN2592_FWD_Clean_3226,train,3,249,연결만 변경,재현됨
+SN2592_FWD_Clean_3227,train,2,242,절점삭제,재현됨
+SN2592_FWD_Clean_3229,train,1,250,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3234,train,3,251,절점추가,절점 추가
+SN2592_FWD_Clean_3235,train,4,252,절점삭제,재배치(연산 밖)
+SN2592_FWD_Clean_3239,train,3,253,연결만 변경,재현됨
+SN2592_FWD_Clean_3241,train,3,254,연결만 변경,재현됨
+SN2592_FWD_Clean_3243,train,5,255,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_3244,train,2,104,절점추가,절점 추가
+SN2592_FWD_Clean_3248,train,1,256,연결만 변경,재현됨
+SN2592_FWD_Clean_3249,train,5,51,절점삭제,순수 삭제
+SN2592_FWD_Clean_3250,train,1,56,절점삭제 + 절점추가,절점 추가
+SN2592_FWD_Clean_3259,train,4,100,절점삭제,재현됨
+SN2592_FWD_Clean_3260,train,4,257,연결만 변경,재배치(연산 밖)
+SN2592_FWD_Clean_3264,train,1,29,연결만 변경,재현됨
+SN2592_FWD_Clean_3265,train,3,258,연결만 변경,재현됨
+SN2592_FWD_Clean_3267,train,3,22,절점추가,절점 추가
+SN2592_FWD_Clean_3274,train,3,115,절점삭제,재현됨
+SN2592_FWD_Clean_3277,test,0,37,절점삭제,재현됨
+SN2592_FWD_Clean_3278,train,4,20,연결만 변경,재현됨
+SN2592_FWD_Clean_3283,train,4,170,절점삭제,재현됨
+SN2592_FWD_Clean_3285,train,2,11,절점추가,절점 추가
+SN2592_FWD_Clean_3286,train,2,242,절점삭제,재현됨

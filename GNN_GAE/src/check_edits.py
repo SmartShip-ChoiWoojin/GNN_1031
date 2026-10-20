@@ -19,7 +19,8 @@ import numpy as np
 import gae_paths as gp
 import features as F
 from bdf_io import discover_pairs
-from meshedit import EditableMesh, EditError, check, merge_candidates
+from meshdiff import signature
+from meshedit import EditableMesh, EditError, check, collapse_pairs, merge_candidates
 
 
 class Failed(AssertionError):
@@ -258,6 +259,83 @@ def t_reflex_quad_rejected(names: list[str], pairs: dict) -> str:
     return f"오목 사각형 병합 {n}건 거부 + 통과분 내각합 360° 확인"
 
 
+def t_collapse_random(names: list[str], pairs: dict, rng: random.Random) -> str:
+    """무작위 절점 병합 — 받아들여진 것은 불변식을 지키고, 거부된 것은 메쉬를 안 건드린다.
+
+    병합은 좌표를 하나도 바꾸지 않는다(자리가 남는 절점의 번호가 남는다). 그래서
+    살아남은 절점의 좌표는 전부 원본과 같아야 하고, 사라진 것은 정확히 remove 하나다.
+    """
+    n_ok = n_rej = 0
+    for nm in names:
+        base = EditableMesh.load(*pairs[nm])
+        cands = collapse_pairs(base)
+        for r, k, _ in rng.sample(cands, min(12, len(cands))):
+            t = base.clone()
+            before_sig = (dict(t.coords), [list(s[2]) for s in t.shells], [tuple(l[2]) for l in t.lines])
+            try:
+                op = t.collapse_edge(r, k)
+            except EditError:
+                _ok((dict(t.coords), [list(s[2]) for s in t.shells], [tuple(l[2]) for l in t.lines])
+                    == before_sig, f"{nm}: 거부된 병합 {r}→{k} 가 메쉬를 바꿨다")
+                n_rej += 1
+                continue
+            _ok(set(base.coords) - set(t.coords) == {r}, f"{nm}: {r}→{k} 뒤 사라진 절점이 {r} 하나가 아니다")
+            _ok(all(t.coords[n] == base.coords[n] for n in t.coords), f"{nm}: 병합이 좌표를 바꿨다")
+            _ok(all(r not in s[2] for s in t.shells) and all(r not in l[2] for l in t.lines),
+                f"{nm}: 사라진 절점 {r} 를 아직 쓰는 요소가 있다")
+            rep = check(t, base, regen=True)
+            _ok(rep.ok, f"{nm}: 병합 {r}→{k} 뒤 불변식 위반\n{rep}")
+            _ok(len(op.info["ext_removed"]) == int(bool(base.ext.get(r))),
+                f"{nm}: ext 자리 병합 기록이 틀렸다")
+            n_ok += 1
+    return f"병합 {n_ok}건 불변식 유지 · 거부 {n_rej}건은 메쉬 불변"
+
+
+def t_collapse_batch_order(names: list[str], pairs: dict) -> str:
+    """사람의 병합을 한 묶음으로 적용하면 하나씩 적용한 것과 결과가 같아야 한다.
+
+    묶음 적용(collapse_many)을 쓰는 이유는 중간 상태에서만 거부되는 경우(_0274) 때문인데,
+    하나씩 해도 되는 경우에는 결과가 완전히 같아야 묶음 처리가 정당하다.
+    """
+    from pairs import discover_good_pairs, load_pair
+    from regen_oracle import collapse_groups
+
+    good = discover_good_pairs()
+    n = 0
+    for nm in [x for x in names if x in good]:
+        p = load_pair(nm, good, pairs)
+        todo = [(r, k) for k, rs in collapse_groups(p) for r in rs]
+        if not todo:
+            continue
+        one = EditableMesh(p.before)
+        try:
+            for r, k in todo:
+                one.collapse_edge(r, k)
+        except EditError:
+            continue      # 하나씩은 안 되는 경우 — 묶음의 존재 이유. 비교 대상이 아니다
+        many = EditableMesh(p.before)
+        many.collapse_many(todo)
+        _ok(signature(one) == signature(many), f"{nm}: 묶음 적용과 하나씩 적용의 결과가 다르다")
+        n += 1
+    return f"사람 병합 {n}쌍 — 묶음 = 하나씩"
+
+
+def t_signature_ignores_ids(names: list[str], pairs: dict) -> str:
+    """메쉬 서명은 절점·요소 번호와 무관해야 한다 (사람은 남길 번호를 일정하게 안 고른다)."""
+    for nm in names[:50]:
+        m = EditableMesh.load(*pairs[nm])
+        perm = {n: 900000 + i for i, n in enumerate(sorted(m.coords, reverse=True))}
+        t = m.clone()
+        t.coords = {perm[n]: c for n, c in m.coords.items()}
+        t.shells = [[eid + 7, ty, [perm[n] for n in ns]] for eid, ty, ns in m.shells][::-1]
+        t.lines = [[eid + 7, ty, tuple(perm[n] for n in ns)] for eid, ty, ns in m.lines]
+        t._dirty()
+        _ok(signature(t) == signature(m), f"{nm}: 번호만 바꿨는데 서명이 달라졌다")
+        t.coords[perm[min(m.coords)]] = tuple(np.add(m.coords[min(m.coords)], (0.5, 0, 0)))
+        _ok(signature(t) != signature(m), f"{nm}: 절점을 0.5mm 옮겼는데 서명이 같다")
+    return f"{min(50, len(names))}개 — 번호 바꿈은 같음, 0.5mm 이동은 다름"
+
+
 # ──────────────────────────────────────────────────────────────────────────
 def main() -> None:
     ap = argparse.ArgumentParser(description="편집 계층 회귀 테스트")
@@ -279,6 +357,9 @@ def main() -> None:
         ("1D 함께 삭제(drop_lines)", lambda: t_drop_lines(names, pairs)),
         ("ext 절점 고정", lambda: t_ext_nodes_frozen(names, pairs)),
         ("오목 사각형 거부", lambda: t_reflex_quad_rejected(names, pairs)),
+        ("절점 병합 무작위", lambda: t_collapse_random(names, pairs, rng)),
+        ("절점 병합 묶음 = 하나씩", lambda: t_collapse_batch_order(sorted(pairs), pairs)),
+        ("메쉬 서명은 번호 무관", lambda: t_signature_ignores_ids(names, pairs)),
     ]
 
     failed = 0
