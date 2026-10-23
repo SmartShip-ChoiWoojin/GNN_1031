@@ -192,6 +192,7 @@ runs/
 
 # GNN_GAE 가 내보내는 뷰어 HTML (plotly.js 인라인이라 파일당 ~5MB)
 GNN_GAE/out/
+GNN_GAE_CHOI/out/
 
 # 수정본 데이터 (원본 데이터와 같은 취급 — bdf/json 은 위에서 이미 제외됨)
 GNN_GAE/data_folder/
