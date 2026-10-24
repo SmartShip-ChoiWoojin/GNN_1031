@@ -57,8 +57,12 @@ def _shell_keys(mesh) -> list:
 
 
 def test_names() -> list[str]:
+    from fasoo_drm import setting_fasoo
     from labels import load_label_table
 
+    # 사내 PC 에서는 라벨 엑셀에 FASOO 암호가 걸린다. 다른 진입점(app.py 등)과 같이 읽기 전에 푼다.
+    # FASOO 가 없는 PC 에서는 아무 일도 하지 않는다.
+    setting_fasoo()
     lab = load_label_table(vp.gp.LABEL_XLSX)
     sure_bad = set(lab[(lab.cls == 1) & (lab.ambig == 0)].name)
     with open(vp.DATA_PATH, "rb") as fh:

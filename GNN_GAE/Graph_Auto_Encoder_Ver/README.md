@@ -249,6 +249,32 @@ python src/vg_test.py                                   # 테스트 901개 × 7�
 python src/vg_test.py --models nnconv_l64               # 모델 하나만
 ```
 
+## 다른 컴퓨터에서 돌리기
+
+git 에는 **코드만** 있다. 데이터·모델·결과는 `.gitignore` 대상이라 따로 옮겨야 한다.
+이 폴더는 `GNN_GAE/src` 와 `GNN_Claude/src` 의 코드를 가져다 쓰므로, 이 폴더만이 아니라
+**저장소 전체**(`git clone https://github.com/SmartShip-ChoiWoojin/GNN_1031.git`)를 받아야 한다.
+
+1. 데이터를 아래 자리에 복사한다 (경로는 저장소 폴더 기준, 코드가 이 자리를 찾는다).
+
+   | 데이터 | 자리 | 크기 |
+   |---|---|---|
+   | 원본 메쉬 (.bdf + .json 4,000개) | `SN2592_FWD_Clean/` | 46MB |
+   | 사람이 고친 Good 메쉬 | `GNN_GAE/data_folder/2026_10_08_n509/` | 7.8MB |
+   | 라벨 엑셀 | `fe model 1D index 0918.xlsx` | 132KB |
+
+2. 파이썬 환경: 저장소의 `requirements.txt` + PyTorch, PyG(`torch_geometric`), streamlit, plotly.
+3. 둘 중 하나:
+   - **모델을 새로 학습**: 아래 "돌려 보기" 순서대로 (데이터 → 학습 → 재생성 → 테스트).
+     같은 설정이어도 GPU 계산 차이로 결과가 1~2%p 다를 수 있다.
+   - **이 컴퓨터의 결과를 그대로 쓰기**: `Graph_Auto_Encoder_Ver/` 아래 `cache/`(20MB),
+     `runs/`(23MB, 모델·결과 표·판정), `out/`(117MB, 재생성 .bdf)를 같은 자리에 복사한다.
+4. 사내 PC 에서 라벨 엑셀에 FASOO 암호가 걸려 있으면 `vg_test.py` 가 읽기 전에 자동으로 푼다
+   (`src/fasoo_drm.py`). 이후 새로 만드는 파일에도 암호가 걸린다.
+5. VS Code 에서 `gae_paths` 등을 못 찾는다고 나오면 `.vscode/settings.json` 에
+   `python.analysis.extraPaths` 로 `GNN_GAE/Graph_Auto_Encoder_Ver/src`, `GNN_GAE/src`, `src` 를
+   넣는다 (`.json` 이 `.gitignore` 대상이라 설정 파일은 git 에 없다).
+
 ## 파일
 
 ```
